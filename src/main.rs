@@ -28,6 +28,7 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
     // TODO create links for each sentence
     // TODO fetch content from ChatGPT if not found in database
     // TODO store content in database
+    // TODO fetch random content from database if no path is given
 
     let body = format!(
         r#"
