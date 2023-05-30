@@ -57,6 +57,7 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
 
     // TODO store content in database
     // TODO create links for each sentence
+    // Parse markdown
 
     let body = format!(
         r#"
@@ -132,7 +133,7 @@ async fn fetch_content_from_gpt(title: &str) -> Result<String, Box<dyn std::erro
     let messages = vec![
         Message {
             role: "system".to_string(),
-            content: "You are a blog author.".to_string(),
+            content: "You are a blog author. Format the blog posts using markdown.".to_string(),
         },
         Message {
             role: "user".to_string(),
