@@ -46,8 +46,8 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
     let title = unslugify(req.uri().path());
     let title = capitalize_words(&title);
 
+    // TODO fetch random content from database if no path is given
     // TODO fetch content from database
-    // TODO create links for each sentence
 
     // TODO fetch content from ChatGPT if not found in database
     let content = fetch_content_from_gpt(&title)
@@ -56,7 +56,7 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
         .replace("\n", "<br>");
 
     // TODO store content in database
-    // TODO fetch random content from database if no path is given
+    // TODO create links for each sentence
 
     let body = format!(
         r#"
