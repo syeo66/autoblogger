@@ -1,41 +1,68 @@
 #![deny(warnings)]
 
-use std::convert::Infallible;
-use std::net::SocketAddr;
-
 use bytes::Bytes;
 use http_body_util::Full;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Request, Response};
+use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
+use serde::{Deserialize, Serialize};
+use std::convert::Infallible;
+use std::env;
+use std::net::SocketAddr;
 use tokio::net::TcpListener;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct Message {
+    role: String,
+    content: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Choice {
+    index: i64,
+    message: Message,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Completion {
+    id: String,
+    object: String,
+    created: i64,
+    model: String,
+    choices: Vec<Choice>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct RequestBody {
+    model: String,
+    messages: Vec<Message>,
+    max_tokens: i64,
+}
 
 // An async function that consumes a request, does nothing with it and returns a
 // response.
 async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
-    let title: String = req
-        .uri()
-        .path()
-        .to_string()
-        .replace("-", " ")
-        .chars()
-        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
-        .collect();
-
+    let title = unslugify(req.uri().path());
     let title = capitalize_words(&title);
 
     // TODO fetch content from database
     // TODO create links for each sentence
+
     // TODO fetch content from ChatGPT if not found in database
+    let content = fetch_content_from_gpt(&title)
+        .await
+        .unwrap_or("".to_string())
+        .replace("\n", "<br>");
+
     // TODO store content in database
     // TODO fetch random content from database if no path is given
 
     let body = format!(
         r#"
-        This is a page about <strong>{}</strong>.
-        This is another line.
+        <p>{}</p>
         "#,
-        title
+        content
     );
 
     let html = format!(
@@ -93,6 +120,60 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             }
         });
     }
+}
+
+async fn fetch_content_from_gpt(title: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let openai_api_key = env::var("OPENAI_API_KEY").unwrap();
+    let model = "gpt-3.5-turbo";
+    let api_key = &openai_api_key;
+    let url = "https://api.openai.com/v1/chat/completions";
+    let prompt = format!("Write a blog post about the following topic: {}", title);
+
+    let messages = vec![
+        Message {
+            role: "system".to_string(),
+            content: "You are a blog author.".to_string(),
+        },
+        Message {
+            role: "user".to_string(),
+            content: prompt.to_string(),
+        },
+    ];
+
+    let headers = build_headers(api_key)?;
+    let body: RequestBody = RequestBody {
+        model: model.to_string(),
+        messages: messages.clone(),
+        max_tokens: 2000,
+    };
+
+    let client = reqwest::Client::new();
+    let response: Completion = client
+        .post(url)
+        .headers(headers)
+        .json(&body)
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    Ok(response.choices[0].message.content.clone())
+}
+
+fn build_headers(api_key: &str) -> Result<HeaderMap, Box<dyn std::error::Error>> {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        AUTHORIZATION,
+        HeaderValue::from_str(&format!("Bearer {}", api_key))?,
+    );
+    Ok(headers)
+}
+
+fn unslugify(s: &str) -> String {
+    s.replace("-", " ")
+        .chars()
+        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+        .collect()
 }
 
 fn capitalize_words(s: &str) -> String {
