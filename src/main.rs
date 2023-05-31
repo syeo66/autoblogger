@@ -1,6 +1,5 @@
 #![deny(warnings)]
 
-use ammonia::clean;
 use bytes::Bytes;
 use comrak::{
     format_html_with_plugins, parse_document, plugins, Arena, ComrakOptions, ComrakPlugins,
@@ -51,28 +50,21 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
     let title = unslugify(req.uri().path());
     let title = capitalize_words(&title);
 
-    // TODO fetch random content from database if no path is given
-    // TODO fetch content from database
+    // TODO create new topic if no url is given
+    // TODO show a list of topics from database if no url is given
+
+    // TODO fetch content from database based on slug
 
     // TODO fetch content from ChatGPT if not found in database
     let content = fetch_content_from_gpt(&title)
         .await
-        .unwrap_or("".to_string())
-        .replace("\n", "<br>");
+        .unwrap_or("".to_string());
 
-    // TODO fix codeblock rendering
     let content = markdown_parse(&content);
-    let content = clean(&content);
 
-    // TODO store content in database
+    // TODO store content in database if fetched from ChatGPT
     // TODO create links for each sentence
-
-    let body = format!(
-        r#"
-        <p>{}</p>
-        "#,
-        content
-    );
+    // TODO improve styles
 
     let html = format!(
         r#"
@@ -81,6 +73,11 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
         <head>
             <meta charset="utf-8">
             <title>{}</title>
+            <style>
+                pre {{
+                    padding: 0.5rem;
+                }}
+            </style>
         </head>
         <body>
             <h1>{}</h1>
@@ -90,7 +87,7 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
         "#,
         title,
         title,
-        body.trim()
+        content.trim()
     );
 
     Ok(Response::new(Full::new(Bytes::from(html))))
@@ -211,7 +208,7 @@ fn markdown_parse(s: &str) -> String {
 
     let comrak_options = ComrakOptions {
         render: ComrakRenderOptions {
-            unsafe_: true,
+            unsafe_: false,
             escape: false,
             ..ComrakRenderOptions::default()
         },
