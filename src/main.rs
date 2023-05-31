@@ -1,7 +1,11 @@
 #![deny(warnings)]
 
+use ammonia::clean;
 use bytes::Bytes;
-use comrak::{markdown_to_html, ComrakOptions, ComrakRenderOptions};
+use comrak::{
+    format_html_with_plugins, parse_document, plugins, Arena, ComrakOptions, ComrakPlugins,
+    ComrakRenderOptions,
+};
 use http_body_util::Full;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
@@ -56,18 +60,9 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
         .unwrap_or("".to_string())
         .replace("\n", "<br>");
 
-    let comrak_options = ComrakOptions {
-        render: ComrakRenderOptions {
-            unsafe_: true,
-            escape: false,
-            ..ComrakRenderOptions::default()
-        },
-        ..ComrakOptions::default()
-    };
-    let content = markdown_to_html(&content, &comrak_options);
-
     // TODO fix codeblock rendering
-    // purify html
+    let content = markdown_parse(&content);
+    let content = clean(&content);
 
     // TODO store content in database
     // TODO create links for each sentence
@@ -209,4 +204,29 @@ fn capitalize_words(s: &str) -> String {
     }
 
     result
+}
+
+fn markdown_parse(s: &str) -> String {
+    let arena = Arena::new();
+
+    let comrak_options = ComrakOptions {
+        render: ComrakRenderOptions {
+            unsafe_: true,
+            escape: false,
+            ..ComrakRenderOptions::default()
+        },
+        ..ComrakOptions::default()
+    };
+
+    let root = parse_document(&arena, s, &comrak_options);
+
+    let mut html = vec![];
+    let mut plugins = ComrakPlugins::default();
+    let adapter = plugins::syntect::SyntectAdapter::new("base16-ocean.dark");
+
+    plugins.render.codefence_syntax_highlighter = Some(&adapter);
+
+    format_html_with_plugins(root, &comrak_options, &mut html, &plugins).unwrap();
+
+    String::from_utf8(html).unwrap()
 }
