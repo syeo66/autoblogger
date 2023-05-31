@@ -1,6 +1,7 @@
 #![deny(warnings)]
 
 use bytes::Bytes;
+use comrak::{markdown_to_html, ComrakOptions, ComrakRenderOptions};
 use http_body_util::Full;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
@@ -55,9 +56,21 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
         .unwrap_or("".to_string())
         .replace("\n", "<br>");
 
+    let comrak_options = ComrakOptions {
+        render: ComrakRenderOptions {
+            unsafe_: true,
+            escape: false,
+            ..ComrakRenderOptions::default()
+        },
+        ..ComrakOptions::default()
+    };
+    let content = markdown_to_html(&content, &comrak_options);
+
+    // TODO fix codeblock rendering
+    // purify html
+
     // TODO store content in database
     // TODO create links for each sentence
-    // Parse markdown
 
     let body = format!(
         r#"
@@ -82,7 +95,7 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
         "#,
         title,
         title,
-        body.trim().replace("\n", "<br>")
+        body.trim()
     );
 
     Ok(Response::new(Full::new(Bytes::from(html))))
@@ -92,6 +105,8 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
 pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // This address is localhost
     let addr: SocketAddr = ([127, 0, 0, 1], 3000).into();
+
+    env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY should be set");
 
     // Bind to the port and listen for incoming TCP connections
     let listener = TcpListener::bind(addr).await?;
@@ -180,6 +195,7 @@ fn unslugify(s: &str) -> String {
 fn capitalize_words(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
     let mut capitalize_next = true;
+
     for c in s.chars() {
         if c.is_whitespace() {
             capitalize_next = true;
@@ -191,5 +207,6 @@ fn capitalize_words(s: &str) -> String {
             result.push(c.to_ascii_lowercase());
         }
     }
+
     result
 }

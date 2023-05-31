@@ -12,3 +12,4 @@ http-body-util = "0.1.0-rc.2"
 bytes = "1.4.0"
 serde = { version = "1.0.163", features = ["derive", "serde_derive"] }
 reqwest = { version = "0.11.18", features = ["blocking", "serde_json", "json"] }
+comrak = "0.18.0"
