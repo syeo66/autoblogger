@@ -77,11 +77,39 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
                 pre {{
                     padding: 0.5rem;
                 }}
+
+                body {{
+                    margin: 0;
+                    padding: 0;
+                    width: 100%;
+                }}
+
+                article {{
+                    padding: 2.5rem;
+                }}
+
+                @media screen and (min-width: 768px) {{
+                    article {{
+                        max-width: 960px;
+                        margin: 0 auto;
+                    }}
+                }}
+
+                p {{
+                    margin: 0 0 2rem 0;
+                    padding: 0;
+                    font-family: sans-serif;
+                    line-height: 1.5;
+                    hyphens: auto;
+                    text-align: justify;
+                }}
             </style>
         </head>
         <body>
-            <h1>{}</h1>
-            {}
+            <article>
+                <h1>{}</h1>
+                {}
+            </article>
         </body>
         </html>
         "#,
