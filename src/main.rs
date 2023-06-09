@@ -193,11 +193,23 @@ async fn fetch_content_from_gpt(title: &str) -> Result<String, Box<dyn std::erro
     let messages = vec![
         Message {
             role: "system".to_string(),
-            content: "You are a blog author. Format the blog posts using markdown.".to_string(),
+            content: "You are a blog author.".to_string(),
         },
         Message {
             role: "user".to_string(),
-            content: prompt.to_string(),
+            content: "Create an example blog post to show how links should be used in a blog post about 'More Thoughts On AI'. Format the blog posts using markdown. Add inline links of important parts by using slugs as a relative URL without protocol, host or domain part.".to_string(),
+        },
+        Message {
+            role: "assistant".to_string(),
+            content: "Artificial Intelligence (AI) has been a hot topic in recent years, as advances in technology have allowed for greater and more widespread implementation of these systems. While [AI offers many benefits to society](ai-offers-many-benefits-to-society), including increased efficiency and accuracy in various fields ranging from healthcare to finance, there are also concerns about [its potential negative consequences](potential-negative-consequences-of-ai).
+
+One of the major concerns about AI is its potential to displace human workers in certain industries. As AI becomes more advanced, it is likely that it will be able to perform many tasks that are currently done by human workers more efficiently and accurately. While this could lead to lower costs and increased productivity for businesses, it may also lead to job loss and economic disruption for those who are displaced.
+
+".to_string(),
+        },
+        Message {
+            role: "user".to_string(),
+            content: format!("Write a blog entry about '{}'. Format the blog posts using markdown. Add at least 5 inline links of important parts in thext (not at the end) by using slugs as a relative URL without protocol, host or domain part (no https://example.com). Do not repeat the title in the article.", prompt.to_string()),
         },
     ];
 
