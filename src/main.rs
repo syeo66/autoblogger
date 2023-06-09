@@ -10,6 +10,7 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Request, Response};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::env;
@@ -47,22 +48,46 @@ struct RequestBody {
 // An async function that consumes a request, does nothing with it and returns a
 // response.
 async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
-    let title = unslugify(req.uri().path());
+    let conn = Connection::open("./blog.db").expect("Could not open database");
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS articles (
+            slug     TEXT PRIMARY KEY,
+            title    TEXT NOT NULL,
+            content  TEXT NOT NULL,
+            createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        )",
+        (), // empty list of parameters.
+    )
+    .expect("Could not create table");
+
+    let slug = req.uri().path().trim_start_matches('/');
+    let title = unslugify(slug);
     let title = capitalize_words(&title);
 
-    // TODO create new topic if no url is given
     // TODO show a list of topics from database if no url is given
 
-    // TODO fetch content from database based on slug
+    // fetch content from database based on slug
+    let result = conn
+        .prepare("SELECT content FROM articles WHERE title = ?1 LIMIT 1")
+        .expect("Could not prepare query")
+        .query_row(params![title], |row| row.get(0));
 
-    // TODO fetch content from ChatGPT if not found in database
-    let content = fetch_content_from_gpt(&title)
-        .await
-        .unwrap_or("".to_string());
+    // fetch content from ChatGPT if not found in database
+    let content = match result {
+        Ok(content) => content,
+        _ => fetch_content_from_gpt(&title)
+            .await
+            .unwrap_or("".to_string()),
+    };
+
+    let _ = conn.execute(
+        "INSERT INTO articles (slug, title, content) VALUES (?1, ?2, ?3)",
+        params![slug, title, content],
+    );
 
     let content = markdown_parse(&content);
 
-    // TODO store content in database if fetched from ChatGPT
     // TODO create links for each sentence
     // TODO improve styles
 
