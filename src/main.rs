@@ -73,6 +73,8 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
         .expect("Could not prepare query")
         .query_row(params![title], |row| row.get(0));
 
+    // TODO prevent creating a new article if one was generated in the last 24 hours
+
     // fetch content from ChatGPT if not found in database
     let content = match result {
         Ok(content) => content,
@@ -88,7 +90,6 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
 
     let content = markdown_parse(&content);
 
-    // TODO create links for each sentence
     // TODO improve styles
 
     let html = format!(
