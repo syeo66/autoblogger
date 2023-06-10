@@ -125,7 +125,7 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // This address is localhost
-    let addr: SocketAddr = ([127, 0, 0, 1], 3000).into();
+    let addr: SocketAddr = ([0, 0, 0, 0], 3000).into();
 
     env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY should be set");
 
