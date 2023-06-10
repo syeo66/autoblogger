@@ -61,11 +61,32 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
     )
     .expect("Could not create table");
 
-    let slug = req.uri().path().trim_start_matches('/');
-    let title = unslugify(slug);
+    let slug = req.uri().path().trim_start_matches('/').trim();
+    let slug = slug.replace(".", "-");
+    let title = unslugify(&slug);
     let title = capitalize_words(&title);
 
-    // TODO show a list of topics from database if no url is given
+    // if slug is empty, return list of articles
+    if slug.is_empty() {
+        let mut html = String::new();
+        html.push_str("<ul>");
+        for row in conn
+            .prepare("SELECT title, slug FROM articles ORDER BY createdAt DESC")
+            .expect("Could not prepare query")
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .expect("Could not query")
+        {
+            let (title, slug) = row.unwrap();
+            html.push_str(&format!("<li><a href=\"{}\">{}</a></li>", slug, title));
+        }
+        html.push_str("</ul>");
+
+        let html = apply_layout("Blog", &html);
+
+        return Ok(Response::new(Full::new(Bytes::from(html))));
+    }
 
     // fetch content from database based on slug
     let result = conn
@@ -90,59 +111,7 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
 
     let content = markdown_parse(&content);
 
-    // TODO improve styles
-
-    let html = format!(
-        r#"
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="utf-8">
-            <title>{}</title>
-            <style>
-                pre {{
-                    padding: 0.5rem;
-                }}
-
-                body {{
-                    margin: 0;
-                    padding: 0;
-                    width: 100%;
-                }}
-
-                article {{
-                    padding: 2.5rem;
-                }}
-
-                @media screen and (min-width: 768px) {{
-                    article {{
-                        max-width: 960px;
-                        margin: 0 auto;
-                    }}
-                }}
-
-                p {{
-                    margin: 0 0 2rem 0;
-                    padding: 0;
-                    font-family: sans-serif;
-                    line-height: 1.5;
-                    hyphens: auto;
-                    text-align: justify;
-                }}
-            </style>
-        </head>
-        <body>
-            <article>
-                <h1>{}</h1>
-                {}
-            </article>
-        </body>
-        </html>
-        "#,
-        title,
-        title,
-        content.trim()
-    );
+    let html = apply_layout(&title, &content);
 
     Ok(Response::new(Full::new(Bytes::from(html))))
 }
@@ -190,7 +159,7 @@ async fn fetch_content_from_gpt(title: &str) -> Result<String, Box<dyn std::erro
     let model = "gpt-4";
     let api_key = &openai_api_key;
     let url = "https://api.openai.com/v1/chat/completions";
-    let prompt = format!("Write a blog post about the following topic: {}", title);
+    let prompt = format!("Write a blog entry about the topic '{}'. Format the blog posts using markdown. Add at least 5 inline links of important parts in thext (not at the end) by using slugs as a relative URL without protocol, host or domain part (no https://example.com). Do not repeat the title in the article.", title);
 
     let messages = vec![
         Message {
@@ -205,13 +174,11 @@ async fn fetch_content_from_gpt(title: &str) -> Result<String, Box<dyn std::erro
             role: "assistant".to_string(),
             content: "Artificial Intelligence (AI) has been a hot topic in recent years, as advances in technology have allowed for greater and more widespread implementation of these systems. While [AI offers many benefits to society](ai-offers-many-benefits-to-society), including increased efficiency and accuracy in various fields ranging from healthcare to finance, there are also concerns about [its potential negative consequences](potential-negative-consequences-of-ai).
 
-One of the major concerns about AI is its potential to displace human workers in certain industries. As AI becomes more advanced, it is likely that it will be able to perform many tasks that are currently done by human workers more efficiently and accurately. While this could lead to lower costs and increased productivity for businesses, it may also lead to job loss and economic disruption for those who are displaced.
-
-".to_string(),
+One of the major concerns about AI is its potential to displace human workers in certain industries. As AI becomes more advanced, it is likely that it will be able to perform many tasks that are currently done by human workers more efficiently and accurately. While this could lead to lower costs and increased productivity for businesses, it may also lead to job loss and economic disruption for those who are displaced.".to_string(),
         },
         Message {
             role: "user".to_string(),
-            content: format!("Write a blog entry about '{}'. Format the blog posts using markdown. Add at least 5 inline links of important parts in thext (not at the end) by using slugs as a relative URL without protocol, host or domain part (no https://example.com). Do not repeat the title in the article.", prompt.to_string()),
+            content: prompt.to_string(),
         },
     ];
 
@@ -268,6 +235,94 @@ fn capitalize_words(s: &str) -> String {
     }
 
     result
+}
+
+fn apply_layout(title: &str, content: &str) -> String {
+    // TODO improve styles
+    format!(
+        r#"
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="initial-scale=1, width=device-width">
+            <meta name="robots" content="noindex,nofollow">
+            <title>{}</title>
+            <style>
+                pre {{
+                    padding: 0.5rem;
+                }}
+
+                body {{
+                    margin: 0;
+                    padding: 0;
+                    width: 100%;
+                }}
+
+                article {{
+                    padding: 1rem;
+                }}
+
+                article :first-child {{
+                    margin-top: 0;
+                }}
+
+                header a {{
+                    text-decoration: none;
+                    color: black;
+                }}
+
+                p {{
+                    margin: 0 0 2rem 0;
+                    padding: 0;
+                    font-family: sans-serif;
+                    line-height: 1.5;
+                    hyphens: auto;
+                    text-align: justify;
+                }}
+
+                header {{
+                    padding: 1rem;
+                    background-color: #f5f5f5;
+                    font-family: sans-serif;
+                    font-size: 1rem;
+                }}
+
+                header h1 {{
+                    margin: 0;
+                    padding: 0;
+                }}
+
+                @media screen and (min-width: 768px) {{
+                    header {{
+                        padding: 2.5rem;
+                    }}
+
+                    article {{
+                        max-width: 960px;
+                        margin: 0 auto;
+                        padding: 2.5rem;
+                    }}
+                }}
+            </style>
+        </head>
+        <body>
+            <header>
+                <h1><a href="/">Autoblogger</a></h1>
+            </header>
+            <article>
+                <h1>{}</h1>
+                {}
+            </article>
+        </body>
+        </html>
+        "#,
+        title,
+        title,
+        content.trim()
+    )
+    .trim()
+    .into()
 }
 
 fn markdown_parse(s: &str) -> String {
