@@ -6,8 +6,8 @@ COPY . .
 
 RUN cargo build -r 
 
-FROM alpine
+FROM debian:bullseye-slim
 
 COPY --from=builder /usr/src/app/target/release/autoblogger /usr/local/bin/autoblogger
 
-CMD ["/usr/local/bin/autoblogger"]
+CMD ["autoblogger"]
