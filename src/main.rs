@@ -186,7 +186,8 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
 async fn fetch_content_from_gpt(title: &str) -> Result<String, Box<dyn std::error::Error>> {
     let openai_api_key = env::var("OPENAI_API_KEY").unwrap();
-    let model = "gpt-3.5-turbo";
+    // let model = "gpt-3.5-turbo";
+    let model = "gpt-4";
     let api_key = &openai_api_key;
     let url = "https://api.openai.com/v1/chat/completions";
     let prompt = format!("Write a blog post about the following topic: {}", title);
