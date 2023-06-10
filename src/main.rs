@@ -48,7 +48,8 @@ struct RequestBody {
 // An async function that consumes a request, does nothing with it and returns a
 // response.
 async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
-    let conn = Connection::open("./blog.db").expect("Could not open database");
+    let db_path = env::var("DB_PATH").unwrap_or("./blog.db".to_string());
+    let conn = Connection::open(db_path).expect("Could not open database");
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS articles (
