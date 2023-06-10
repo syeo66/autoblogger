@@ -104,6 +104,12 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
             .unwrap_or("".to_string()),
     };
 
+    if content.is_empty() {
+        return Ok(Response::new(Full::new(Bytes::from(
+            "No content found for this article",
+        ))));
+    }
+
     let _ = conn.execute(
         "INSERT INTO articles (slug, title, content) VALUES (?1, ?2, ?3)",
         params![slug, title, content],
