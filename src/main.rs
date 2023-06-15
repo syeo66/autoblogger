@@ -64,6 +64,10 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
 
     let slug = req.uri().path().trim_start_matches('/').trim();
     let slug = slug.replace(".", "-");
+
+    println!("==========================================");
+    println!("Slug: {}", slug);
+
     let title = unslugify(&slug);
     let title = capitalize_words(&title);
 
@@ -95,7 +99,17 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
         .expect("Could not prepare query")
         .query_row(params![title], |row| row.get(0));
 
-    // TODO prevent creating a new article if one was generated in the last 24 hours
+    // prevent creating a new article if one was generated in the last 24 hours
+    let last = conn
+        .prepare("SELECT content FROM articles WHERE createdAt > datetime('now','-1 day') LIMIT 1")
+        .expect("Could not prepare query")
+        .query_row([], |row| row.get::<usize, String>(0))
+        .unwrap_or("".to_string());
+
+    if !last.is_empty() && result.is_err() {
+        let html = apply_layout("Try later","Only one article can be generated per day. Please wait 24 hours before generating a new article.");
+        return Ok(Response::new(Full::new(Bytes::from(html))));
+    }
 
     // fetch content from ChatGPT if not found in database
     let content = match result {
@@ -161,6 +175,8 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 }
 
 async fn fetch_content_from_gpt(title: &str) -> Result<String, Box<dyn std::error::Error>> {
+    println!("Fetching content from GPT for title: {}", title);
+
     let openai_api_key = env::var("OPENAI_API_KEY").unwrap();
     // let model = "gpt-3.5-turbo";
     let model = "gpt-4";
@@ -197,16 +213,19 @@ One of the major concerns about AI is its potential to displace human workers in
     };
 
     let client = reqwest::Client::new();
-    let response: Completion = client
-        .post(url)
-        .headers(headers)
-        .json(&body)
-        .send()
-        .await?
-        .json()
-        .await?;
+    let response = client.post(url).headers(headers).json(&body).send().await;
+    let response = match response {
+        Err(err) => Err(err),
+        Ok(response) => response.json::<Completion>().await,
+    };
 
-    Ok(response.choices[0].message.content.clone())
+    match response {
+        Err(_) => {
+            println!("Error: {:?}", response);
+            return Ok("".to_string());
+        }
+        Ok(response) => Ok(response.choices[0].message.content.clone()),
+    }
 }
 
 fn build_headers(api_key: &str) -> Result<HeaderMap, Box<dyn std::error::Error>> {
