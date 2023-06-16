@@ -100,6 +100,7 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
         .query_row(params![title], |row| row.get(0));
 
     // prevent creating a new article if one was generated in the last 24 hours
+    // TODO prevent creating a new article if generation is in progress
     let last = conn
         .prepare("SELECT content FROM articles WHERE createdAt > datetime('now','-1 day') LIMIT 1")
         .expect("Could not prepare query")
