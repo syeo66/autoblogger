@@ -74,7 +74,7 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
     // if slug is empty, return list of articles
     if slug.is_empty() {
         let mut html = String::new();
-        html.push_str("<ul>");
+        html.push_str("<ul class='article-list'>");
         for row in conn
             .prepare("SELECT title, slug FROM articles ORDER BY createdAt DESC")
             .expect("Could not prepare query")
@@ -296,6 +296,24 @@ fn apply_layout(title: &str, content: &str) -> String {
 
                 article :first-child {{
                     margin-top: 0;
+                }}
+
+                .article-list {{
+                    list-style: none;
+                    padding: 0;
+                    margin: 0;
+                }}
+
+                .article-list li {{
+                    margin: 0 0 1rem 0;
+                    padding: 1rem;
+                    border: 1px solid #ccc;
+                    border-radius: 0.5rem;
+                }}
+
+                .article-list li a {{
+                    text-decoration: none;
+                    font-size: 1.2rem;
                 }}
 
                 header a {{
