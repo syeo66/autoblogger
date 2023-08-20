@@ -76,7 +76,7 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
         let mut html = String::new();
         html.push_str("<ul class='article-list'>");
         for row in conn
-            .prepare("SELECT title, slug FROM articles ORDER BY createdAt DESC")
+            .prepare("SELECT title, slug FROM articles ORDER BY createdAt DESC LIMIT 20")
             .expect("Could not prepare query")
             .query_map([], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
