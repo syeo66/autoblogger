@@ -9,6 +9,7 @@ use http_body_util::Full;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Request, Response};
+use hyper_util::rt::TokioIo;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -159,6 +160,8 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // driven forward by the runtime, eventually yielding a TCP stream.
         let (stream, _) = listener.accept().await?;
 
+        let io = TokioIo::new(stream);
+
         // Spin up a new task in Tokio so we can continue to listen for new TCP connection on the
         // current task without waiting for the processing of the HTTP1 connection we just received
         // to finish
@@ -166,7 +169,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             // Handle the connection from the client using HTTP1 and pass any
             // HTTP requests received on that connection to the `content` function
             if let Err(err) = http1::Builder::new()
-                .serve_connection(stream, service_fn(content))
+                .serve_connection(io, service_fn(content))
                 .await
             {
                 println!("Error serving connection: {:?}", err);
