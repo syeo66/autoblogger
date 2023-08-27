@@ -64,7 +64,7 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
     .expect("Could not create table");
 
     let slug = req.uri().path().trim_start_matches('/').trim();
-    let slug = slug.replace(".", "-");
+    let slug = slug.replace(".", "-").replace("_", "-").to_lowercase();
 
     println!("==========================================");
     println!("Slug: {}", slug);
