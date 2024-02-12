@@ -6,7 +6,7 @@ COPY . .
 
 RUN cargo build -r 
 
-FROM debian:bullseye
+FROM debian:bookworm-slim
 
 COPY --from=builder /usr/src/app/target/release/autoblogger /usr/local/bin/autoblogger
 RUN apt-get update
