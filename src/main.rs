@@ -64,7 +64,11 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
     .expect("Could not create table");
 
     let slug = req.uri().path().trim_start_matches('/').trim();
-    let slug = slug.replace(".", "-").replace("_", "-").replace("/", "-").to_lowercase();
+    let slug = slug
+        .replace(".", "-")
+        .replace("_", "-")
+        .replace("/", "-")
+        .to_lowercase();
 
     println!("==========================================");
     println!("Slug: {}", slug);
@@ -268,7 +272,6 @@ fn capitalize_words(s: &str) -> String {
 }
 
 fn apply_layout(title: &str, content: &str) -> String {
-    // TODO improve styles
     // TODO add back link
     format!(
         r#"
@@ -282,6 +285,10 @@ fn apply_layout(title: &str, content: &str) -> String {
             <style>
                 pre {{
                     padding: 0.5rem;
+                }}
+
+                :root {{
+                    color-scheme: light dark;  
                 }}
 
                 body {{
@@ -319,9 +326,19 @@ fn apply_layout(title: &str, content: &str) -> String {
                     font-size: 1.2rem;
                 }}
 
+                @media (prefers-color-scheme: light) {{
+                    header a {{
+                        color: black;
+                    }}
+                }}
+                @media (prefers-color-scheme: dark) {{
+                    header a {{
+                        color: white;
+                    }}
+                }}
+
                 header a {{
                     text-decoration: none;
-                    color: black;
                 }}
 
                 p {{
@@ -335,9 +352,18 @@ fn apply_layout(title: &str, content: &str) -> String {
 
                 header, footer {{
                     padding: 1rem;
-                    background-color: #f5f5f5;
                     font-family: sans-serif;
                     font-size: 1rem;
+                }}
+                @media (prefers-color-scheme: light) {{
+                    header, footer {{
+                        background-color: #f5f5f5;
+                    }}
+                }}
+                @media (prefers-color-scheme: dark) {{
+                    header, footer {{
+                        background-color: #333;
+                    }}
                 }}
 
                 footer {{
