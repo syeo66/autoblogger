@@ -344,7 +344,7 @@ fn apply_layout(title: &str, content: &str) -> String {
                 p {{
                     margin: 0 0 2rem 0;
                     padding: 0;
-                    font-family: sans-serif;
+                    font-family: system-ui, ui-sans-serif,  sans-serif;
                     line-height: 1.5;
                     hyphens: auto;
                     text-align: justify;
@@ -352,7 +352,7 @@ fn apply_layout(title: &str, content: &str) -> String {
 
                 header, footer {{
                     padding: 1rem;
-                    font-family: sans-serif;
+                    font-family: system-ui, ui-sans-serif, sans-serif;
                     font-size: 1rem;
                 }}
                 @media (prefers-color-scheme: light) {{
