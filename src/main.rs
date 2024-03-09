@@ -315,10 +315,11 @@ fn apply_layout(title: &str, content: &str) -> String {
                 }}
 
                 .article-list li {{
+                    border-radius: 0.5rem;
+                    border: 1px solid #ccc;
+                    font-family: system-ui, ui-sans-serif,  sans-serif;
                     margin: 0 0 1rem 0;
                     padding: 1rem;
-                    border: 1px solid #ccc;
-                    border-radius: 0.5rem;
                 }}
 
                 .article-list li a {{
@@ -342,11 +343,11 @@ fn apply_layout(title: &str, content: &str) -> String {
                 }}
 
                 p {{
+                    font-family: system-ui, ui-sans-serif,  sans-serif;
+                    hyphens: auto;
+                    line-height: 1.5;
                     margin: 0 0 2rem 0;
                     padding: 0;
-                    font-family: system-ui, ui-sans-serif,  sans-serif;
-                    line-height: 1.5;
-                    hyphens: auto;
                     text-align: justify;
                 }}
 
