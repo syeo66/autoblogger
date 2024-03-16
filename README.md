@@ -34,13 +34,22 @@ Please exercise caution and use this code responsibly. OpenAI's guidelines and b
 
 ## Usage
 
-1. Set the `OPENAI_API_KEY` environment variable with your OpenAI API key:
+1. Set the `AI_MODEL` environment variable to `gpt4` or `claude3`
+
+2. Set the `OPENAI_API_KEY` environment variable with your OpenAI API key,
+   or use `ANTHROPIC_API_KEY` if you use the Claude model:
 
    ```shell
    export OPENAI_API_KEY=your-api-key
    ```
 
-2. Start the autoblogger server:
+   or
+
+   ```shell
+   export ANTHROPIC_API_KEY=your-api-key
+   ```
+
+3. Start the autoblogger server:
 
    ```shell
    cargo run
