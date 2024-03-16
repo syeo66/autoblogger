@@ -31,12 +31,24 @@ struct Choice {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct Completion {
+struct GptCompletion {
     id: String,
     object: String,
     created: i64,
     model: String,
     choices: Vec<Choice>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct AnthropicContent {
+    text: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct AnthropicCompletion {
+    content: Vec<AnthropicContent>,
+    model: String,
+    role: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -120,9 +132,7 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
     // fetch content from ChatGPT if not found in database
     let content = match result {
         Ok(content) => content,
-        _ => fetch_content_from_gpt(&title)
-            .await
-            .unwrap_or("".to_string()),
+        _ => fetch_content(&title).await.unwrap_or("".to_string()),
     };
 
     if content.is_empty() {
@@ -148,7 +158,23 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // This address is localhost
     let addr: SocketAddr = ([0, 0, 0, 0], 3000).into();
 
-    env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY should be set");
+    env::var("AI_MODEL").expect("AI_MODEL should be set");
+
+    let ai_model = env::var("AI_MODEL").unwrap();
+
+    match ai_model.as_str() {
+        "gpt4" => {
+            env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY should be set");
+        }
+
+        "claude3" => {
+            env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY should be set");
+        }
+
+        _ => {
+            panic!("AI_MODEL should be 'gpt4' or 'claude3'");
+        }
+    }
 
     // Bind to the port and listen for incoming TCP connections
     let listener = TcpListener::bind(addr).await?;
@@ -182,38 +208,25 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 }
 
-async fn fetch_content_from_gpt(title: &str) -> Result<String, Box<dyn std::error::Error>> {
-    println!("Fetching content from GPT for title: {}", title);
+async fn fetch_content(title: &str) -> Result<String, Box<dyn std::error::Error>> {
+    match env::var("AI_MODEL").unwrap().as_str() {
+        "gpt4" => fetch_content_from_gpt(title).await,
+        "claude3" => fetch_content_from_claude(title).await,
+        _ => Err("AI_MODEL should be 'gpt4' or 'claude3'".into()),
+    }
+}
 
-    let openai_api_key = env::var("OPENAI_API_KEY").unwrap();
-    // let model = "gpt-3.5-turbo";
-    let model = "gpt-4";
-    let api_key = &openai_api_key;
-    let url = "https://api.openai.com/v1/chat/completions";
-    let prompt = format!("Write a blog entry about the topic '{}'. Format the blog posts using markdown. Add at least 5 inline links of important parts in thext (not at the end) by using slugs as a relative URL without protocol, host or domain part (no https://example.com). Do not repeat the title in the article.", title);
+async fn fetch_content_from_claude(title: &str) -> Result<String, Box<dyn std::error::Error>> {
+    println!("Fetching content from Claude for title: {}", title);
 
-    let messages = vec![
-        Message {
-            role: "system".to_string(),
-            content: "You are a blog author.".to_string(),
-        },
-        Message {
-            role: "user".to_string(),
-            content: "Create an example blog post to show how links should be used in a blog post about 'More Thoughts On AI'. Format the blog posts using markdown. Add inline links of important parts by using slugs as a relative URL without protocol, host or domain part.".to_string(),
-        },
-        Message {
-            role: "assistant".to_string(),
-            content: "Artificial Intelligence (AI) has been a hot topic in recent years, as advances in technology have allowed for greater and more widespread implementation of these systems. While [AI offers many benefits to society](ai-offers-many-benefits-to-society), including increased efficiency and accuracy in various fields ranging from healthcare to finance, there are also concerns about [its potential negative consequences](potential-negative-consequences-of-ai).
+    let anthropy_api_key = env::var("ANTHROPIC_API_KEY").unwrap();
 
-One of the major concerns about AI is its potential to displace human workers in certain industries. As AI becomes more advanced, it is likely that it will be able to perform many tasks that are currently done by human workers more efficiently and accurately. While this could lead to lower costs and increased productivity for businesses, it may also lead to job loss and economic disruption for those who are displaced.".to_string(),
-        },
-        Message {
-            role: "user".to_string(),
-            content: prompt.to_string(),
-        },
-    ];
+    let api_key = &anthropy_api_key;
+    let url = "https://api.anthropic.com/v1/messages";
+    let messages = get_messages(title);
+    let model = "claude-3-opus-20240229";
 
-    let headers = build_headers(api_key)?;
+    let headers = build_anthropic_headers(api_key)?;
     let body: RequestBody = RequestBody {
         model: model.to_string(),
         messages: messages.clone(),
@@ -224,7 +237,48 @@ One of the major concerns about AI is its potential to displace human workers in
     let response = client.post(url).headers(headers).json(&body).send().await;
     let response = match response {
         Err(err) => Err(err),
-        Ok(response) => response.json::<Completion>().await,
+        Ok(response) => response.json::<AnthropicCompletion>().await,
+    };
+
+    match response {
+        Err(_) => {
+            println!("Error: {:?}", response);
+            return Ok("".to_string());
+        }
+        Ok(response) => Ok(response.content[0].text.clone()),
+    }
+}
+
+fn build_anthropic_headers(api_key: &str) -> Result<HeaderMap, Box<dyn std::error::Error>> {
+    let mut headers = HeaderMap::new();
+    headers.insert("x-api-key", HeaderValue::from_str(&format!("{}", api_key))?);
+    headers.insert("anthropic-version", HeaderValue::from_str("2023-06-01")?);
+    headers.insert("content-type", HeaderValue::from_str("application/json")?);
+    Ok(headers)
+}
+
+async fn fetch_content_from_gpt(title: &str) -> Result<String, Box<dyn std::error::Error>> {
+    println!("Fetching content from GPT for title: {}", title);
+
+    let openai_api_key = env::var("OPENAI_API_KEY").unwrap();
+
+    let model = "gpt-4";
+    let api_key = &openai_api_key;
+    let url = "https://api.openai.com/v1/chat/completions";
+    let messages = get_messages(title);
+
+    let headers = build_gpt_headers(api_key)?;
+    let body: RequestBody = RequestBody {
+        model: model.to_string(),
+        messages: messages.clone(),
+        max_tokens: 2000,
+    };
+
+    let client = reqwest::Client::new();
+    let response = client.post(url).headers(headers).json(&body).send().await;
+    let response = match response {
+        Err(err) => Err(err),
+        Ok(response) => response.json::<GptCompletion>().await,
     };
 
     match response {
@@ -236,7 +290,7 @@ One of the major concerns about AI is its potential to displace human workers in
     }
 }
 
-fn build_headers(api_key: &str) -> Result<HeaderMap, Box<dyn std::error::Error>> {
+fn build_gpt_headers(api_key: &str) -> Result<HeaderMap, Box<dyn std::error::Error>> {
     let mut headers = HeaderMap::new();
     headers.insert(
         AUTHORIZATION,
@@ -410,6 +464,30 @@ fn apply_layout(title: &str, content: &str) -> String {
     )
     .trim()
     .into()
+}
+
+fn get_messages(title: &str) -> Vec<Message> {
+    let prompt = get_prompt(title);
+    vec![
+        Message {
+            role: "user".to_string(),
+            content: "You are a blog author. Create an example blog post to show how links should be used in a blog post about 'More Thoughts On AI'. Format the blog posts using markdown. Add inline links of important parts by using slugs as a relative URL without protocol, host or domain part.".to_string(),
+        },
+        Message {
+            role: "assistant".to_string(),
+            content: "Artificial Intelligence (AI) has been a hot topic in recent years, as advances in technology have allowed for greater and more widespread implementation of these systems. While [AI offers many benefits to society](ai-offers-many-benefits-to-society), including increased efficiency and accuracy in various fields ranging from healthcare to finance, there are also concerns about [its potential negative consequences](potential-negative-consequences-of-ai).
+
+One of the major concerns about AI is its potential to displace human workers in certain industries. As AI becomes more advanced, it is likely that it will be able to perform many tasks that are currently done by human workers more efficiently and accurately. While this could lead to lower costs and increased productivity for businesses, it may also lead to job loss and economic disruption for those who are displaced.".to_string(),
+        },
+        Message {
+            role: "user".to_string(),
+            content: prompt.to_string(),
+        },
+    ]
+}
+
+fn get_prompt(title: &str) -> String {
+    format!("Write a blog entry about the topic '{}'. Format the blog posts using markdown. Add at least 5 inline links of important parts in thext (not at the end) by using slugs as a relative URL without protocol, host or domain part (no https://example.com). Do not repeat the title in the article.", title)
 }
 
 fn markdown_parse(s: &str) -> String {
