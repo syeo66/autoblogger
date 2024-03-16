@@ -224,7 +224,7 @@ async fn fetch_content_from_claude(title: &str) -> Result<String, Box<dyn std::e
     let api_key = &anthropy_api_key;
     let url = "https://api.anthropic.com/v1/messages";
     let messages = get_messages(title);
-    let model = "claude-3-opus-20240229";
+    let model = "claude-3-sonnet-20240229";
 
     let headers = build_anthropic_headers(api_key)?;
     let body: RequestBody = RequestBody {
