@@ -75,7 +75,20 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
     )
     .expect("Could not create table");
 
-    let slug = req.uri().path().trim_start_matches('/').trim();
+    let uri = req.uri().path();
+    let route = uri.trim_start_matches('/').trim();
+
+    if route == "robots.txt" {
+        return Ok(Response::new(Full::new(Bytes::from(
+            "User-agent: *\nDisallow: /",
+        ))));
+    }
+
+    if route == "favicon.ico" {
+        return Ok(Response::new(Full::new(Bytes::from(""))));
+    }
+
+    let slug = route;
     let slug = slug
         .replace(".", "-")
         .replace("_", "-")
