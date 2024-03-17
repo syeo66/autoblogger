@@ -6,7 +6,7 @@ Autoblogger is a simple blogging platform that generates blog posts using the Ch
 
 - **Inaccuracies**: The AI model may produce incorrect or misleading information. It is essential to verify the generated content and ensure its accuracy before relying on it.
 
-- **Costs**: The Autoblogger code interacts with the OpenAI API, which may incur costs depending on your usage. Make sure to review the pricing and terms of service of the OpenAI API before deploying this code in production or on public servers.
+- **Costs**: The Autoblogger code interacts with paid APIs. This will incur costs depending on your usage. Make sure to review the pricing and terms of service of the API in use before deploying this code in production or on public servers.
 
 - **Not suitable for public servers**: Due to the potential inaccuracies and hallucinations in the generated content, it is strongly recommended not to use Autoblogger on public servers or platforms where the generated content is accessible to a wide audience. It is more suitable for personal use or controlled environments where the content can be reviewed and verified before publication.
 
