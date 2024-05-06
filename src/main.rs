@@ -1,6 +1,7 @@
 #![deny(warnings)]
 
 use bytes::Bytes;
+use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use comrak::{
     format_html_with_plugins, parse_document, plugins, Arena, ComrakOptions, ComrakPlugins,
     ComrakRenderOptions,
@@ -132,13 +133,26 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
     // prevent creating a new article if one was generated in the last 24 hours
     // TODO prevent creating a new article if generation is in progress
     let last = conn
-        .prepare("SELECT content FROM articles WHERE createdAt > datetime('now','-1 day') LIMIT 1")
+        .prepare(
+            "SELECT createdAt FROM articles WHERE createdAt > datetime('now','-1 day') LIMIT 1",
+        )
         .expect("Could not prepare query")
         .query_row([], |row| row.get::<usize, String>(0))
         .unwrap_or("".to_string());
 
     if !last.is_empty() && result.is_err() {
-        let html = apply_layout("Try later","Only one article can be generated per day. Please wait 24 hours before generating a new article.");
+        println!("{}", last);
+        let date = NaiveDateTime::parse_from_str(&last, "%Y-%m-%d %H:%M:%S").unwrap();
+        let current_time = Local::now();
+        let offset = current_time.offset().clone();
+        let datetime =
+            DateTime::<Local>::from_naive_utc_and_offset(date, offset) + Duration::days(1);
+
+        let difference = datetime.signed_duration_since(current_time);
+        let hours = difference.num_hours();
+        let msg = format!("Only one article can be generated per day. Please wait {} hours before generating a new article.", hours);
+
+        let html = apply_layout("Try later", &msg);
         return Ok(Response::new(Full::new(Bytes::from(html))));
     }
 
