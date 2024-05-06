@@ -141,7 +141,6 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
         .unwrap_or("".to_string());
 
     if !last.is_empty() && result.is_err() {
-        println!("{}", last);
         let date = NaiveDateTime::parse_from_str(&last, "%Y-%m-%d %H:%M:%S").unwrap();
         let current_time = Local::now();
         let offset = current_time.offset().clone();
