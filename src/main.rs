@@ -74,7 +74,16 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
         )",
         (), // empty list of parameters.
     )
-    .expect("Could not create table");
+    .expect("Could not create articles table");
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS locks (
+            title     TEXT NOT NULL,
+            createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        )",
+        (), // empty list of parameters.
+    )
+    .expect("Could not create locks table");
 
     let uri = req.uri().path();
     let route = uri.trim_start_matches('/').trim();
@@ -149,8 +158,22 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
 
         let difference = datetime.signed_duration_since(current_time);
         let hours = difference.num_hours();
-        let msg = format!("Only one article can be generated per day. Please wait {} hours before generating a new article.", hours);
+        let msg = format!("Only one article can be generated per day. Please wait {} hours before generating a new article.", hours+1);
 
+        let html = apply_layout("Try later", &msg);
+        return Ok(Response::new(Full::new(Bytes::from(html))));
+    }
+
+    let lock = conn
+        .prepare(
+            "SELECT createdAt FROM locks WHERE createdAt > datetime('now','-5 minutes') LIMIT 1",
+        )
+        .expect("Could not prepare query")
+        .query_row([], |row| row.get::<usize, String>(0))
+        .unwrap_or("".to_string());
+
+    if !lock.is_empty() && result.is_err() {
+        let msg = format!("Content creation temporary locked");
         let html = apply_layout("Try later", &msg);
         return Ok(Response::new(Full::new(Bytes::from(html))));
     }
@@ -158,7 +181,10 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
     // fetch content from ChatGPT if not found in database
     let content = match result {
         Ok(content) => content,
-        _ => fetch_content(&title).await.unwrap_or("".to_string()),
+        _ => {
+            let _ = conn.execute("INSERT INTO locks (title) VALUES (?1)", params!["lock"]);
+            fetch_content(&title).await.unwrap_or("".to_string())
+        }
     };
 
     if content.is_empty() {
