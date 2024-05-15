@@ -335,7 +335,7 @@ async fn fetch_content_from_gpt(title: &str) -> Result<Content, Box<dyn std::err
 
     let openai_api_key = env::var("OPENAI_API_KEY").unwrap();
 
-    let model = "gpt-4";
+    let model = "gpt-4o";
     let api_key = &openai_api_key;
     let url = "https://api.openai.com/v1/chat/completions";
     let messages = get_messages(title);
