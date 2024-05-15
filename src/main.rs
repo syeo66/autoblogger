@@ -59,6 +59,12 @@ struct RequestBody {
     max_tokens: i64,
 }
 
+#[derive(Debug)]
+struct Content {
+    title: String,
+    content: String,
+}
+
 // An async function that consumes a request, does nothing with it and returns a
 // response.
 async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
@@ -135,9 +141,14 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
 
     // fetch content from database based on slug
     let result = conn
-        .prepare("SELECT content FROM articles WHERE title = ?1 LIMIT 1")
+        .prepare("SELECT title, content FROM articles WHERE title = ?1 LIMIT 1")
         .expect("Could not prepare query")
-        .query_row(params![title], |row| row.get(0));
+        .query_row(params![title], |row| {
+            Ok(Content {
+                title: row.get(0)?,
+                content: row.get(1)?,
+            })
+        });
 
     // prevent creating a new article if one was generated in the last 24 hours
     let last = conn
@@ -182,11 +193,14 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
         Ok(content) => content,
         _ => {
             let _ = conn.execute("INSERT INTO locks (title) VALUES (?1)", params!["lock"]);
-            fetch_content(&title).await.unwrap_or("".to_string())
+            fetch_content(&title).await.unwrap_or(Content {
+                title: "".to_string(),
+                content: "".to_string(),
+            })
         }
     };
 
-    if content.is_empty() {
+    if content.content.is_empty() {
         return Ok(Response::new(Full::new(Bytes::from(
             "No content found for this article",
         ))));
@@ -194,12 +208,12 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
 
     let _ = conn.execute(
         "INSERT INTO articles (slug, title, content) VALUES (?1, ?2, ?3)",
-        params![slug, title, content],
+        params![slug, content.title, content.content],
     );
 
-    let content = markdown_parse(&content);
+    let html = markdown_parse(&content.content);
 
-    let html = apply_layout(&title, &content);
+    let html = apply_layout(&content.title, &html);
 
     Ok(Response::new(Full::new(Bytes::from(html))))
 }
@@ -259,7 +273,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 }
 
-async fn fetch_content(title: &str) -> Result<String, Box<dyn std::error::Error>> {
+async fn fetch_content(title: &str) -> Result<Content, Box<dyn std::error::Error>> {
     match env::var("AI_MODEL").unwrap().as_str() {
         "gpt4" => fetch_content_from_gpt(title).await,
         "claude3" => fetch_content_from_claude(title).await,
@@ -267,7 +281,7 @@ async fn fetch_content(title: &str) -> Result<String, Box<dyn std::error::Error>
     }
 }
 
-async fn fetch_content_from_claude(title: &str) -> Result<String, Box<dyn std::error::Error>> {
+async fn fetch_content_from_claude(title: &str) -> Result<Content, Box<dyn std::error::Error>> {
     println!("Fetching content from Claude for title: {}", title);
 
     let anthropy_api_key = env::var("ANTHROPIC_API_KEY").unwrap();
@@ -291,12 +305,20 @@ async fn fetch_content_from_claude(title: &str) -> Result<String, Box<dyn std::e
         Ok(response) => response.json::<AnthropicCompletion>().await,
     };
 
+    // TODO fetch a better title form api
+
     match response {
         Err(_) => {
             println!("Error: {:?}", response);
-            return Ok("".to_string());
+            return Ok(Content {
+                title: "".to_string(),
+                content: "".to_string(),
+            });
         }
-        Ok(response) => Ok(response.content[0].text.clone()),
+        Ok(response) => Ok(Content {
+            title: title.to_string(),
+            content: response.content[0].text.clone(),
+        }),
     }
 }
 
@@ -308,7 +330,7 @@ fn build_anthropic_headers(api_key: &str) -> Result<HeaderMap, Box<dyn std::erro
     Ok(headers)
 }
 
-async fn fetch_content_from_gpt(title: &str) -> Result<String, Box<dyn std::error::Error>> {
+async fn fetch_content_from_gpt(title: &str) -> Result<Content, Box<dyn std::error::Error>> {
     println!("Fetching content from GPT for title: {}", title);
 
     let openai_api_key = env::var("OPENAI_API_KEY").unwrap();
@@ -335,9 +357,16 @@ async fn fetch_content_from_gpt(title: &str) -> Result<String, Box<dyn std::erro
     match response {
         Err(_) => {
             println!("Error: {:?}", response);
-            return Ok("".to_string());
+            return Ok(Content {
+                title: "".to_string(),
+                content: "".to_string(),
+            });
         }
-        Ok(response) => Ok(response.choices[0].message.content.clone()),
+
+        Ok(response) => Ok(Content {
+            title: title.to_string(),
+            content: response.choices[0].message.content.clone(),
+        }),
     }
 }
 
