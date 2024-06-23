@@ -523,7 +523,7 @@ fn apply_layout(title: &str, content: &str) -> String {
                     text-decoration: none;
                 }}
 
-                p {{
+                p, ol {{
                     font-family: system-ui, ui-sans-serif,  sans-serif;
                     hyphens: auto;
                     line-height: 1.5;
