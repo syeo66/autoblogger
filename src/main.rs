@@ -466,6 +466,7 @@ fn apply_layout(title: &str, content: &str) -> String {
             <style>
                 pre {{
                     padding: 0.5rem;
+                    margin: 0 0 2rem 0;
                 }}
 
                 :root {{
@@ -523,7 +524,7 @@ fn apply_layout(title: &str, content: &str) -> String {
                     text-decoration: none;
                 }}
 
-                p, ol {{
+                p, ol, ul {{
                     font-family: system-ui, ui-sans-serif,  sans-serif;
                     hyphens: auto;
                     line-height: 1.5;
