@@ -533,6 +533,10 @@ fn apply_layout(title: &str, content: &str) -> String {
                     text-align: justify;
                 }}
 
+                ol, ul {{
+                    padding: 0 0 0 3rem;
+                }}
+
                 header, footer {{
                     padding: 1rem;
                     font-family: system-ui, ui-sans-serif, sans-serif;
