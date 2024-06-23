@@ -114,9 +114,6 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
     println!("==========================================");
     println!("Slug: {}", slug);
 
-    let title = unslugify(&slug);
-    let title = capitalize_words(&title);
-
     // if slug is empty, return list of articles
     if slug.is_empty() {
         let mut html = String::new();
@@ -141,9 +138,9 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
 
     // fetch content from database based on slug
     let result = conn
-        .prepare("SELECT title, content FROM articles WHERE title = ?1 LIMIT 1")
+        .prepare("SELECT title, content FROM articles WHERE slug = ?1 LIMIT 1")
         .expect("Could not prepare query")
-        .query_row(params![title], |row| {
+        .query_row(params![slug], |row| {
             Ok(Content {
                 title: row.get(0)?,
                 content: row.get(1)?,
@@ -188,11 +185,17 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
         return Ok(Response::new(Full::new(Bytes::from(html))));
     }
 
-    // fetch content from ChatGPT if not found in database
+    // fetch content from API if not found in database
     let content = match result {
         Ok(content) => content,
         _ => {
             let _ = conn.execute("INSERT INTO locks (title) VALUES (?1)", params!["lock"]);
+
+            let title = fetch_title(&slug).await.unwrap_or({
+                let t = unslugify(&slug);
+                capitalize_words(&t)
+            });
+
             fetch_content(&title).await.unwrap_or(Content {
                 title: "".to_string(),
                 content: "".to_string(),
@@ -212,7 +215,6 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
     );
 
     let html = markdown_parse(&content.content);
-
     let html = apply_layout(&content.title, &html);
 
     Ok(Response::new(Full::new(Bytes::from(html))))
@@ -273,22 +275,26 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 }
 
-async fn fetch_content(title: &str) -> Result<Content, Box<dyn std::error::Error>> {
+async fn fetch_title(slug: &str) -> Result<String, Box<dyn std::error::Error>> {
     match env::var("AI_MODEL").unwrap().as_str() {
-        "gpt4" => fetch_content_from_gpt(title).await,
-        "claude3" => fetch_content_from_claude(title).await,
+        "gpt4" => fetch_title_from_gpt(slug).await,
+        "claude3" => fetch_title_from_claude(slug).await,
         _ => Err("AI_MODEL should be 'gpt4' or 'claude3'".into()),
     }
 }
 
-async fn fetch_content_from_claude(title: &str) -> Result<Content, Box<dyn std::error::Error>> {
-    println!("Fetching content from Claude for title: {}", title);
+async fn fetch_title_from_claude(slug: &str) -> Result<String, Box<dyn std::error::Error>> {
+    println!("Fetching title from Claude for slug: {}", slug);
 
+    fetch_from_claude(get_title_messages(slug)).await
+}
+
+async fn fetch_from_claude(messages: Vec<Message>) -> Result<String, Box<dyn std::error::Error>> {
     let anthropy_api_key = env::var("ANTHROPIC_API_KEY").unwrap();
 
     let api_key = &anthropy_api_key;
     let url = "https://api.anthropic.com/v1/messages";
-    let messages = get_messages(title);
+
     let model = "claude-3-5-sonnet-20240620";
 
     let headers = build_anthropic_headers(api_key)?;
@@ -310,35 +316,23 @@ async fn fetch_content_from_claude(title: &str) -> Result<Content, Box<dyn std::
     match response {
         Err(_) => {
             println!("Error: {:?}", response);
-            return Ok(Content {
-                title: "".to_string(),
-                content: "".to_string(),
-            });
+            return Err("Error fetching title from Claude".into());
         }
-        Ok(response) => Ok(Content {
-            title: title.to_string(),
-            content: response.content[0].text.clone(),
-        }),
+        Ok(response) => Ok(response.content[0].text.clone()),
     }
 }
 
-fn build_anthropic_headers(api_key: &str) -> Result<HeaderMap, Box<dyn std::error::Error>> {
-    let mut headers = HeaderMap::new();
-    headers.insert("x-api-key", HeaderValue::from_str(&format!("{}", api_key))?);
-    headers.insert("anthropic-version", HeaderValue::from_str("2023-06-01")?);
-    headers.insert("content-type", HeaderValue::from_str("application/json")?);
-    Ok(headers)
+async fn fetch_title_from_gpt(slug: &str) -> Result<String, Box<dyn std::error::Error>> {
+    println!("Fetching title from GPT for slug: {}", slug);
+    fetch_from_gpt(get_title_messages(slug)).await
 }
 
-async fn fetch_content_from_gpt(title: &str) -> Result<Content, Box<dyn std::error::Error>> {
-    println!("Fetching content from GPT for title: {}", title);
-
+async fn fetch_from_gpt(messages: Vec<Message>) -> Result<String, Box<dyn std::error::Error>> {
     let openai_api_key = env::var("OPENAI_API_KEY").unwrap();
 
     let model = "gpt-4o";
     let api_key = &openai_api_key;
     let url = "https://api.openai.com/v1/chat/completions";
-    let messages = get_messages(title);
 
     let headers = build_gpt_headers(api_key)?;
     let body: RequestBody = RequestBody {
@@ -355,6 +349,59 @@ async fn fetch_content_from_gpt(title: &str) -> Result<Content, Box<dyn std::err
     };
 
     match response {
+        Err(response) => {
+            println!("Error: {:?}", response);
+            return Err("Error fetching title from OpenAI".into());
+        }
+
+        Ok(response) => Ok(response.choices[0].message.content.clone()),
+    }
+}
+
+async fn fetch_content(title: &str) -> Result<Content, Box<dyn std::error::Error>> {
+    match env::var("AI_MODEL").unwrap().as_str() {
+        "gpt4" => fetch_content_from_gpt(title).await,
+        "claude3" => fetch_content_from_claude(title).await,
+        _ => Err("AI_MODEL should be 'gpt4' or 'claude3'".into()),
+    }
+}
+
+async fn fetch_content_from_claude(title: &str) -> Result<Content, Box<dyn std::error::Error>> {
+    println!("Fetching content from Claude for title: {}", title);
+
+    let messages = get_messages(title);
+    let response = fetch_from_claude(messages).await;
+
+    match response {
+        Err(_) => {
+            println!("Error: {:?}", response);
+            return Ok(Content {
+                title: "".to_string(),
+                content: "".to_string(),
+            });
+        }
+        Ok(response) => Ok(Content {
+            title: title.to_string(),
+            content: response,
+        }),
+    }
+}
+
+fn build_anthropic_headers(api_key: &str) -> Result<HeaderMap, Box<dyn std::error::Error>> {
+    let mut headers = HeaderMap::new();
+    headers.insert("x-api-key", HeaderValue::from_str(&format!("{}", api_key))?);
+    headers.insert("anthropic-version", HeaderValue::from_str("2023-06-01")?);
+    headers.insert("content-type", HeaderValue::from_str("application/json")?);
+    Ok(headers)
+}
+
+async fn fetch_content_from_gpt(title: &str) -> Result<Content, Box<dyn std::error::Error>> {
+    println!("Fetching content from GPT for title: {}", title);
+
+    let messages = get_messages(title);
+    let response = fetch_from_gpt(messages).await;
+
+    match response {
         Err(_) => {
             println!("Error: {:?}", response);
             return Ok(Content {
@@ -365,7 +412,7 @@ async fn fetch_content_from_gpt(title: &str) -> Result<Content, Box<dyn std::err
 
         Ok(response) => Ok(Content {
             title: title.to_string(),
-            content: response.choices[0].message.content.clone(),
+            content: response,
         }),
     }
 }
@@ -546,6 +593,14 @@ fn apply_layout(title: &str, content: &str) -> String {
     .into()
 }
 
+fn get_title_messages(slug: &str) -> Vec<Message> {
+    let prompt = get_title_prompt(slug);
+    vec![Message {
+        role: "user".to_string(),
+        content: prompt.to_string(),
+    }]
+}
+
 fn get_messages(title: &str) -> Vec<Message> {
     let prompt = get_prompt(title);
     vec![
@@ -564,6 +619,10 @@ One of the major concerns about AI is its potential to displace human workers in
             content: prompt.to_string(),
         },
     ]
+}
+
+fn get_title_prompt(slug: &str) -> String {
+    format!("Write a blog articles title from the slug '{}'. Return only one title. If it contains anything else then one single title it is useless.", slug)
 }
 
 fn get_prompt(title: &str) -> String {
