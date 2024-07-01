@@ -631,7 +631,7 @@ fn get_title_prompt(slug: &str) -> String {
 }
 
 fn get_prompt(title: &str) -> String {
-    format!("Write a blog entry about the topic '{}'. Format the blog posts using markdown. Add at least 5 inline links of important parts in thext (not at the end) by using slugs as a relative URL without protocol, host or domain part (no https://example.com). Do not repeat the title in the article.", title)
+    format!("Write a blog entry about the topic '{}'. Format the blog posts using markdown. Add at least 5 inline links of important parts in thext (not at the end) by using slugs as a relative URL without protocol, host or domain part (no https://example.com). Do not repeat the title in the article. If you use the title in the article it is useless.", title)
 }
 
 fn markdown_parse(s: &str) -> String {
