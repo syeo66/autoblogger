@@ -214,10 +214,19 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
         params![slug, content.title, content.content],
     );
 
-    let html = markdown_parse(&content.content);
+    let raw: &str = if content.content.trim().starts_with("#") {
+        &remove_first_line(&content.content)
+    } else {
+        &content.content
+    };
+    let html = markdown_parse(raw);
     let html = apply_layout(&content.title, &html);
 
     Ok(Response::new(Full::new(Bytes::from(html))))
+}
+
+fn remove_first_line(s: &str) -> String {
+    s.lines().skip(1).collect::<Vec<&str>>().join("\n")
 }
 
 #[tokio::main]
