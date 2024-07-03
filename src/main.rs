@@ -195,6 +195,7 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
                 let t = unslugify(&slug);
                 capitalize_words(&t)
             });
+            let title = title.trim_matches('"');
 
             fetch_content(&title).await.unwrap_or(Content {
                 title: "".to_string(),
@@ -220,7 +221,7 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
         content.content
     };
     let html = markdown_parse(&raw);
-    let html = apply_layout(&content.title, &html);
+    let html = apply_layout(&content.title.trim_matches('"'), &html);
 
     Ok(Response::new(Full::new(Bytes::from(html))))
 }
@@ -319,8 +320,6 @@ async fn fetch_from_claude(messages: Vec<Message>) -> Result<String, Box<dyn std
         Err(err) => Err(err),
         Ok(response) => response.json::<AnthropicCompletion>().await,
     };
-
-    // TODO fetch a better title form api
 
     match response {
         Err(_) => {
