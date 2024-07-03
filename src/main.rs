@@ -127,7 +127,11 @@ async fn content(req: Request<hyper::body::Incoming>) -> Result<Response<Full<By
             .expect("Could not query")
         {
             let (title, slug) = row.unwrap();
-            html.push_str(&format!("<li><a href=\"{}\">{}</a></li>", slug, title));
+            html.push_str(&format!(
+                "<li><a href=\"{}\">{}</a></li>",
+                slug,
+                title.trim_matches('"')
+            ));
         }
         html.push_str("</ul>");
 
