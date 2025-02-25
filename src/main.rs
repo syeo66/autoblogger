@@ -309,7 +309,7 @@ async fn fetch_from_claude(messages: Vec<Message>) -> Result<String, Box<dyn std
     let api_key = &anthropy_api_key;
     let url = "https://api.anthropic.com/v1/messages";
 
-    let model = "claude-3-5-sonnet-20241022";
+    let model = "claude-3-5-sonnet-latest";
 
     let headers = build_anthropic_headers(api_key)?;
     let body: RequestBody = RequestBody {
