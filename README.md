@@ -34,7 +34,7 @@ Please exercise caution and use this code responsibly. OpenAI's guidelines and b
 
 ## Usage
 
-1. Set the `AI_MODEL` environment variable to `gpt4` or `claude3`
+1. Set the `AI_MODEL` environment variable to `gpt4`, `claude3` or `claude4`
 
 2. Set the `OPENAI_API_KEY` environment variable with your OpenAI API key,
    or use `ANTHROPIC_API_KEY` if you use the Claude model:
