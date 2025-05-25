@@ -487,8 +487,9 @@ fn apply_layout(title: &str, content: &str) -> String {
             <title>{}</title>
             <style>
                 pre {{
-                    padding: 0.5rem;
                     margin: 0 0 2rem 0;
+                    overflow: auto;
+                    padding: 0.5rem;
                 }}
 
                 :root {{
