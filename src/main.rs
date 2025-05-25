@@ -252,8 +252,12 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY should be set");
         }
 
+        "claude4" => {
+            env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY should be set");
+        }
+
         _ => {
-            panic!("AI_MODEL should be 'gpt4' or 'claude3'");
+            panic!("AI_MODEL should be 'gpt4', 'claude3' or 'claude4'");
         }
     }
 
@@ -293,7 +297,8 @@ async fn fetch_title(slug: &str) -> Result<String, Box<dyn std::error::Error>> {
     match env::var("AI_MODEL").unwrap().as_str() {
         "gpt4" => fetch_title_from_gpt(slug).await,
         "claude3" => fetch_title_from_claude(slug).await,
-        _ => Err("AI_MODEL should be 'gpt4' or 'claude3'".into()),
+        "claude4" => fetch_title_from_claude(slug).await,
+        _ => Err("AI_MODEL should be 'gpt4', 'claude3' or 'claude4'".into()),
     }
 }
 
@@ -309,7 +314,11 @@ async fn fetch_from_claude(messages: Vec<Message>) -> Result<String, Box<dyn std
     let api_key = &anthropy_api_key;
     let url = "https://api.anthropic.com/v1/messages";
 
-    let model = "claude-3-7-sonnet-latest";
+    let model = if env::var("AI_MODEL").unwrap().as_str() == "claude3" {
+        "claude-3-7-sonnet-latest"
+    } else {
+        "claude-sonnet-4-20250514"
+    };
 
     let headers = build_anthropic_headers(api_key)?;
     let body: RequestBody = RequestBody {
@@ -374,7 +383,8 @@ async fn fetch_content(title: &str) -> Result<Content, Box<dyn std::error::Error
     match env::var("AI_MODEL").unwrap().as_str() {
         "gpt4" => fetch_content_from_gpt(title).await,
         "claude3" => fetch_content_from_claude(title).await,
-        _ => Err("AI_MODEL should be 'gpt4' or 'claude3'".into()),
+        "claude4" => fetch_content_from_claude(title).await,
+        _ => Err("AI_MODEL should be 'gpt4', 'claude3' or 'claude4'".into()),
     }
 }
 
