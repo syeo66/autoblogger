@@ -4,7 +4,10 @@ use std::env;
 use crate::models::{AnthropicCompletion, Content, GptCompletion, Message, RequestBody};
 
 pub async fn fetch_title(slug: &str) -> Result<String, Box<dyn std::error::Error>> {
-    match env::var("AI_MODEL").unwrap().as_str() {
+    let ai_model = env::var("AI_MODEL")
+        .map_err(|_| "AI_MODEL environment variable not set")?;
+    
+    match ai_model.as_str() {
         "gpt4" => fetch_title_from_gpt(slug).await,
         "claude3" => fetch_title_from_claude(slug).await,
         "claude4" => fetch_title_from_claude(slug).await,
@@ -13,7 +16,10 @@ pub async fn fetch_title(slug: &str) -> Result<String, Box<dyn std::error::Error
 }
 
 pub async fn fetch_content(title: &str) -> Result<Content, Box<dyn std::error::Error>> {
-    match env::var("AI_MODEL").unwrap().as_str() {
+    let ai_model = env::var("AI_MODEL")
+        .map_err(|_| "AI_MODEL environment variable not set")?;
+    
+    match ai_model.as_str() {
         "gpt4" => fetch_content_from_gpt(title).await,
         "claude3" => fetch_content_from_claude(title).await,
         "claude4" => fetch_content_from_claude(title).await,
@@ -27,10 +33,13 @@ async fn fetch_title_from_claude(slug: &str) -> Result<String, Box<dyn std::erro
 }
 
 async fn fetch_from_claude(messages: Vec<Message>) -> Result<String, Box<dyn std::error::Error>> {
-    let anthropy_api_key = env::var("ANTHROPIC_API_KEY").unwrap();
+    let anthropy_api_key = env::var("ANTHROPIC_API_KEY")
+        .map_err(|_| "ANTHROPIC_API_KEY environment variable not set")?;
     let url = "https://api.anthropic.com/v1/messages";
 
-    let model = if env::var("AI_MODEL").unwrap().as_str() == "claude3" {
+    let ai_model = env::var("AI_MODEL")
+        .map_err(|_| "AI_MODEL environment variable not set")?;
+    let model = if ai_model.as_str() == "claude3" {
         "claude-3-7-sonnet-latest"
     } else {
         "claude-sonnet-4-20250514"
@@ -65,7 +74,8 @@ async fn fetch_title_from_gpt(slug: &str) -> Result<String, Box<dyn std::error::
 }
 
 async fn fetch_from_gpt(messages: Vec<Message>) -> Result<String, Box<dyn std::error::Error>> {
-    let openai_api_key = env::var("OPENAI_API_KEY").unwrap();
+    let openai_api_key = env::var("OPENAI_API_KEY")
+        .map_err(|_| "OPENAI_API_KEY environment variable not set")?;
     let model = "gpt-4o";
     let url = "https://api.openai.com/v1/chat/completions";
 
