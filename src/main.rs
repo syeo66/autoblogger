@@ -1,6 +1,7 @@
 #![deny(warnings)]
 
 mod ai;
+mod config;
 mod database;
 mod models;
 mod server;
@@ -8,40 +9,23 @@ mod server;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
-use std::env;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
-
-fn validate_environment() -> Result<(), Box<dyn std::error::Error>> {
-    let ai_model = env::var("AI_MODEL")
-        .map_err(|_| "AI_MODEL environment variable must be set")?;
-
-    match ai_model.as_str() {
-        "gpt4" => {
-            env::var("OPENAI_API_KEY")
-                .map_err(|_| "OPENAI_API_KEY must be set when using gpt4 model")?;
-        }
-        "claude3" | "claude4" => {
-            env::var("ANTHROPIC_API_KEY")
-                .map_err(|_| "ANTHROPIC_API_KEY must be set when using claude3 or claude4 model")?;
-        }
-        _ => {
-            return Err("AI_MODEL must be 'gpt4', 'claude3', or 'claude4'".into());
-        }
-    }
-
-    Ok(())
-}
+use config::Config;
 
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Validate environment variables before starting server
-    validate_environment()
+    // Load and validate configuration
+    let config = Config::from_env()
         .map_err(|e| format!("Configuration error: {}", e))?;
 
+    // Initialize database with config
+    database::init_pool_with_config(&config)
+        .map_err(|e| format!("Database initialization error: {}", e))?;
+
     // This address is localhost
-    let addr: SocketAddr = ([0, 0, 0, 0], 3000).into();
+    let addr: SocketAddr = ([0, 0, 0, 0], config.server_port).into();
 
     // Bind to the port and listen for incoming TCP connections
     let listener = TcpListener::bind(addr).await?;
@@ -62,11 +46,14 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Spin up a new task in Tokio so we can continue to listen for new TCP connection on the
         // current task without waiting for the processing of the HTTP1 connection we just received
         // to finish
+        let config_clone = config.clone();
         tokio::task::spawn(async move {
             // Handle the connection from the client using HTTP1 and pass any
             // HTTP requests received on that connection to the `server::handle_request` function
             if let Err(err) = http1::Builder::new()
-                .serve_connection(io, service_fn(server::handle_request))
+                .serve_connection(io, service_fn(move |req| {
+                    server::handle_request(req, config_clone.clone())
+                }))
                 .await
             {
                 println!("Error serving connection: {:?}", err);
@@ -74,4 +61,3 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         });
     }
 }
-

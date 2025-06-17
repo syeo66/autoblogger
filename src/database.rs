@@ -2,9 +2,9 @@ use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, Connection};
-use std::env;
 use std::sync::OnceLock;
 
+use crate::config::Config;
 use crate::models::Content;
 
 pub type DbPool = Pool<SqliteConnectionManager>;
@@ -12,8 +12,7 @@ pub type DbPool = Pool<SqliteConnectionManager>;
 static DB_POOL: OnceLock<DbPool> = OnceLock::new();
 
 pub fn init_pool() -> Result<DbPool, Box<dyn std::error::Error>> {
-    let db_path = env::var("DB_PATH").unwrap_or("./blog.db".to_string());
-    let manager = SqliteConnectionManager::file(db_path);
+    let manager = SqliteConnectionManager::file("./blog.db");
     let pool = Pool::builder()
         .max_size(10)
         .build(manager)?;
@@ -21,6 +20,23 @@ pub fn init_pool() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Initialize database schema
     let conn = pool.get()?;
     initialize_database(&conn)?;
+    
+    Ok(pool)
+}
+
+pub fn init_pool_with_config(config: &Config) -> Result<DbPool, Box<dyn std::error::Error>> {
+    let manager = SqliteConnectionManager::file(&config.db_path);
+    let pool = Pool::builder()
+        .max_size(10)
+        .build(manager)?;
+    
+    // Initialize database schema
+    let conn = pool.get()?;
+    initialize_database(&conn)?;
+    
+    // Store the pool in the static variable
+    DB_POOL.set(pool.clone())
+        .map_err(|_| "Database pool already initialized")?;
     
     Ok(pool)
 }

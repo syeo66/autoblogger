@@ -8,12 +8,13 @@ use hyper::{Request, Response};
 use std::convert::Infallible;
 
 use crate::ai::{capitalize_words, fetch_content, fetch_title, unslugify};
+use crate::config::Config;
 use crate::database::{
     calculate_wait_time, check_daily_rate_limit, check_generation_lock, create_generation_lock,
     get_article_by_slug, get_pool, get_recent_articles, insert_article,
 };
 
-pub async fn handle_request(req: Request<hyper::body::Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
+pub async fn handle_request(req: Request<hyper::body::Incoming>, config: Config) -> Result<Response<Full<Bytes>>, Infallible> {
     let uri = req.uri().path();
     let route = uri.trim_start_matches('/').trim();
 
@@ -40,7 +41,7 @@ pub async fn handle_request(req: Request<hyper::body::Incoming>) -> Result<Respo
         return handle_article_list().await;
     }
 
-    handle_article_request(&slug).await
+    handle_article_request(&slug, &config).await
 }
 
 async fn handle_article_list() -> Result<Response<Full<Bytes>>, Infallible> {
@@ -72,7 +73,7 @@ async fn handle_article_list() -> Result<Response<Full<Bytes>>, Infallible> {
     Ok(Response::new(Full::new(Bytes::from(html))))
 }
 
-async fn handle_article_request(slug: &str) -> Result<Response<Full<Bytes>>, Infallible> {
+async fn handle_article_request(slug: &str, config: &Config) -> Result<Response<Full<Bytes>>, Infallible> {
     let pool = get_pool();
 
     let existing_article = get_article_by_slug(pool, slug);
@@ -107,13 +108,13 @@ async fn handle_article_request(slug: &str) -> Result<Response<Full<Bytes>>, Inf
 
     let _ = create_generation_lock(pool);
 
-    let title = fetch_title(slug).await.unwrap_or_else(|_| {
+    let title = fetch_title(slug, config).await.unwrap_or_else(|_| {
         let t = unslugify(slug);
         capitalize_words(&t)
     });
     let title = title.trim_matches('"');
 
-    let content = fetch_content(title).await.unwrap_or_else(|_| crate::models::Content {
+    let content = fetch_content(title, config).await.unwrap_or_else(|_| crate::models::Content {
         title: "".to_string(),
         content: "".to_string(),
     });

@@ -1,51 +1,34 @@
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
-use std::env;
 
+use crate::config::{AiModel, Config};
 use crate::models::{AnthropicCompletion, Content, GptCompletion, Message, RequestBody};
 
-pub async fn fetch_title(slug: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let ai_model = env::var("AI_MODEL")
-        .map_err(|_| "AI_MODEL environment variable not set")?;
-    
-    match ai_model.as_str() {
-        "gpt4" => fetch_title_from_gpt(slug).await,
-        "claude3" => fetch_title_from_claude(slug).await,
-        "claude4" => fetch_title_from_claude(slug).await,
-        _ => Err("AI_MODEL should be 'gpt4', 'claude3' or 'claude4'".into()),
+pub async fn fetch_title(slug: &str, config: &Config) -> Result<String, Box<dyn std::error::Error>> {
+    match config.ai_model {
+        AiModel::Gpt4 => fetch_title_from_gpt(slug, config).await,
+        AiModel::Claude3 | AiModel::Claude4 => fetch_title_from_claude(slug, config).await,
     }
 }
 
-pub async fn fetch_content(title: &str) -> Result<Content, Box<dyn std::error::Error>> {
-    let ai_model = env::var("AI_MODEL")
-        .map_err(|_| "AI_MODEL environment variable not set")?;
-    
-    match ai_model.as_str() {
-        "gpt4" => fetch_content_from_gpt(title).await,
-        "claude3" => fetch_content_from_claude(title).await,
-        "claude4" => fetch_content_from_claude(title).await,
-        _ => Err("AI_MODEL should be 'gpt4', 'claude3' or 'claude4'".into()),
+pub async fn fetch_content(title: &str, config: &Config) -> Result<Content, Box<dyn std::error::Error>> {
+    match config.ai_model {
+        AiModel::Gpt4 => fetch_content_from_gpt(title, config).await,
+        AiModel::Claude3 | AiModel::Claude4 => fetch_content_from_claude(title, config).await,
     }
 }
 
-async fn fetch_title_from_claude(slug: &str) -> Result<String, Box<dyn std::error::Error>> {
+async fn fetch_title_from_claude(slug: &str, config: &Config) -> Result<String, Box<dyn std::error::Error>> {
     println!("Fetching title from Claude for slug: {}", slug);
-    fetch_from_claude(get_title_messages(slug)).await
+    fetch_from_claude(get_title_messages(slug), config).await
 }
 
-async fn fetch_from_claude(messages: Vec<Message>) -> Result<String, Box<dyn std::error::Error>> {
-    let anthropy_api_key = env::var("ANTHROPIC_API_KEY")
-        .map_err(|_| "ANTHROPIC_API_KEY environment variable not set")?;
+async fn fetch_from_claude(messages: Vec<Message>, config: &Config) -> Result<String, Box<dyn std::error::Error>> {
+    let anthropy_api_key = config.get_api_key()?;
     let url = "https://api.anthropic.com/v1/messages";
 
-    let ai_model = env::var("AI_MODEL")
-        .map_err(|_| "AI_MODEL environment variable not set")?;
-    let model = if ai_model.as_str() == "claude3" {
-        "claude-3-7-sonnet-latest"
-    } else {
-        "claude-sonnet-4-20250514"
-    };
+    let model = config.ai_model.api_model();
 
-    let headers = build_anthropic_headers(&anthropy_api_key)?;
+    let headers = build_anthropic_headers(anthropy_api_key)?;
     let body = RequestBody {
         model: model.to_string(),
         messages: messages.clone(),
@@ -68,18 +51,17 @@ async fn fetch_from_claude(messages: Vec<Message>) -> Result<String, Box<dyn std
     }
 }
 
-async fn fetch_title_from_gpt(slug: &str) -> Result<String, Box<dyn std::error::Error>> {
+async fn fetch_title_from_gpt(slug: &str, config: &Config) -> Result<String, Box<dyn std::error::Error>> {
     println!("Fetching title from GPT for slug: {}", slug);
-    fetch_from_gpt(get_title_messages(slug)).await
+    fetch_from_gpt(get_title_messages(slug), config).await
 }
 
-async fn fetch_from_gpt(messages: Vec<Message>) -> Result<String, Box<dyn std::error::Error>> {
-    let openai_api_key = env::var("OPENAI_API_KEY")
-        .map_err(|_| "OPENAI_API_KEY environment variable not set")?;
-    let model = "gpt-4o";
+async fn fetch_from_gpt(messages: Vec<Message>, config: &Config) -> Result<String, Box<dyn std::error::Error>> {
+    let openai_api_key = config.get_api_key()?;
+    let model = config.ai_model.api_model();
     let url = "https://api.openai.com/v1/chat/completions";
 
-    let headers = build_gpt_headers(&openai_api_key)?;
+    let headers = build_gpt_headers(openai_api_key)?;
     let body = RequestBody {
         model: model.to_string(),
         messages: messages.clone(),
@@ -102,11 +84,11 @@ async fn fetch_from_gpt(messages: Vec<Message>) -> Result<String, Box<dyn std::e
     }
 }
 
-async fn fetch_content_from_claude(title: &str) -> Result<Content, Box<dyn std::error::Error>> {
+async fn fetch_content_from_claude(title: &str, config: &Config) -> Result<Content, Box<dyn std::error::Error>> {
     println!("Fetching content from Claude for title: {}", title);
 
     let messages = get_messages(title);
-    let response = fetch_from_claude(messages).await;
+    let response = fetch_from_claude(messages, config).await;
 
     match response {
         Err(_) => {
@@ -123,11 +105,11 @@ async fn fetch_content_from_claude(title: &str) -> Result<Content, Box<dyn std::
     }
 }
 
-async fn fetch_content_from_gpt(title: &str) -> Result<Content, Box<dyn std::error::Error>> {
+async fn fetch_content_from_gpt(title: &str, config: &Config) -> Result<Content, Box<dyn std::error::Error>> {
     println!("Fetching content from GPT for title: {}", title);
 
     let messages = get_messages(title);
-    let response = fetch_from_gpt(messages).await;
+    let response = fetch_from_gpt(messages, config).await;
 
     match response {
         Err(_) => {
