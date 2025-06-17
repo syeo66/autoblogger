@@ -6,6 +6,7 @@ use comrak::{
 use http_body_util::Full;
 use hyper::{Request, Response};
 use std::convert::Infallible;
+use tracing::{debug, error, info, warn};
 
 use crate::ai::{capitalize_words, fetch_content, fetch_title, unslugify};
 use crate::config::Config;
@@ -34,8 +35,7 @@ pub async fn handle_request(req: Request<hyper::body::Incoming>, config: Config)
         .replace("/", "-")
         .to_lowercase();
 
-    println!("==========================================");
-    println!("Slug: {}", slug);
+    info!("Processing request for slug: {}", slug);
 
     if slug.is_empty() {
         return handle_article_list().await;
@@ -48,8 +48,12 @@ async fn handle_article_list() -> Result<Response<Full<Bytes>>, Infallible> {
     let pool = get_pool();
 
     let articles = match get_recent_articles(pool) {
-        Ok(articles) => articles,
-        Err(_) => {
+        Ok(articles) => {
+            debug!("Successfully fetched {} recent articles", articles.len());
+            articles
+        },
+        Err(e) => {
+            error!("Failed to fetch articles: {:?}", e);
             return Ok(Response::new(Full::new(Bytes::from(
                 "Failed to fetch articles"
             ))));
@@ -79,6 +83,7 @@ async fn handle_article_request(slug: &str, config: &Config) -> Result<Response<
     let existing_article = get_article_by_slug(pool, slug);
 
     if let Ok(content) = existing_article {
+        info!("Found existing article for slug: {}", slug);
         let raw = if content.content.trim().starts_with("#") {
             remove_first_line(&content.content)
         } else {
@@ -91,6 +96,7 @@ async fn handle_article_request(slug: &str, config: &Config) -> Result<Response<
 
     if let Ok(Some(last_date)) = check_daily_rate_limit(pool) {
         if let Ok(hours_to_wait) = calculate_wait_time(&last_date) {
+            warn!("Rate limit exceeded for slug: {}, {} hours remaining", slug, hours_to_wait);
             let msg = format!(
                 "Only one article can be generated per day. Please wait {} hours before generating a new article.",
                 hours_to_wait
@@ -101,31 +107,42 @@ async fn handle_article_request(slug: &str, config: &Config) -> Result<Response<
     }
 
     if let Ok(true) = check_generation_lock(pool) {
+        warn!("Generation locked for slug: {}", slug);
         let msg = "Content creation temporary locked".to_string();
         let html = apply_layout("Try later", &msg);
         return Ok(Response::new(Full::new(Bytes::from(html))));
     }
 
     let _ = create_generation_lock(pool);
+    info!("Starting article generation for slug: {}", slug);
 
-    let title = fetch_title(slug, config).await.unwrap_or_else(|_| {
+    let title = fetch_title(slug, config).await.unwrap_or_else(|e| {
+        warn!("Failed to fetch title for slug '{}': {:?}", slug, e);
         let t = unslugify(slug);
         capitalize_words(&t)
     });
     let title = title.trim_matches('"');
+    debug!("Generated title: {}", title);
 
-    let content = fetch_content(title, config).await.unwrap_or_else(|_| crate::models::Content {
-        title: "".to_string(),
-        content: "".to_string(),
+    let content = fetch_content(title, config).await.unwrap_or_else(|e| {
+        error!("Failed to fetch content for title '{}': {:?}", title, e);
+        crate::models::Content {
+            title: "".to_string(),
+            content: "".to_string(),
+        }
     });
 
     if content.content.is_empty() {
+        error!("No content generated for slug: {}", slug);
         return Ok(Response::new(Full::new(Bytes::from(
             "No content found for this article",
         ))));
     }
 
-    let _ = insert_article(pool, slug, &content.title, &content.content);
+    match insert_article(pool, slug, &content.title, &content.content) {
+        Ok(_) => info!("Successfully stored article for slug: {}", slug),
+        Err(e) => error!("Failed to store article for slug '{}': {:?}", slug, e),
+    }
 
     let raw = if content.content.trim().starts_with("#") {
         remove_first_line(&content.content)

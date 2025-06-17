@@ -1,4 +1,5 @@
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
+use tracing::{debug, error, info};
 
 use crate::config::{AiModel, Config};
 use crate::models::{AnthropicCompletion, Content, GptCompletion, Message, RequestBody};
@@ -18,7 +19,7 @@ pub async fn fetch_content(title: &str, config: &Config) -> Result<Content, Box<
 }
 
 async fn fetch_title_from_claude(slug: &str, config: &Config) -> Result<String, Box<dyn std::error::Error>> {
-    println!("Fetching title from Claude for slug: {}", slug);
+    info!("Fetching title from Claude for slug: {}", slug);
     fetch_from_claude(get_title_messages(slug), config).await
 }
 
@@ -43,16 +44,19 @@ async fn fetch_from_claude(messages: Vec<Message>, config: &Config) -> Result<St
     };
 
     match response {
-        Err(_) => {
-            println!("Error: {:?}", response);
+        Err(e) => {
+            error!("Failed to fetch title from Claude: {:?}", e);
             Err("Error fetching title from Claude".into())
         }
-        Ok(response) => Ok(response.content[0].text.clone()),
+        Ok(response) => {
+            debug!("Successfully received title from Claude");
+            Ok(response.content[0].text.clone())
+        },
     }
 }
 
 async fn fetch_title_from_gpt(slug: &str, config: &Config) -> Result<String, Box<dyn std::error::Error>> {
-    println!("Fetching title from GPT for slug: {}", slug);
+    info!("Fetching title from GPT for slug: {}", slug);
     fetch_from_gpt(get_title_messages(slug), config).await
 }
 
@@ -76,53 +80,62 @@ async fn fetch_from_gpt(messages: Vec<Message>, config: &Config) -> Result<Strin
     };
 
     match response {
-        Err(response) => {
-            println!("Error: {:?}", response);
+        Err(e) => {
+            error!("Failed to fetch title from OpenAI: {:?}", e);
             Err("Error fetching title from OpenAI".into())
         }
-        Ok(response) => Ok(response.choices[0].message.content.clone()),
+        Ok(response) => {
+            debug!("Successfully received title from OpenAI");
+            Ok(response.choices[0].message.content.clone())
+        },
     }
 }
 
 async fn fetch_content_from_claude(title: &str, config: &Config) -> Result<Content, Box<dyn std::error::Error>> {
-    println!("Fetching content from Claude for title: {}", title);
+    info!("Fetching content from Claude for title: {}", title);
 
     let messages = get_messages(title);
     let response = fetch_from_claude(messages, config).await;
 
     match response {
-        Err(_) => {
-            println!("Error: {:?}", response);
+        Err(e) => {
+            error!("Failed to fetch content from Claude for title '{}': {:?}", title, e);
             Ok(Content {
                 title: "".to_string(),
                 content: "".to_string(),
             })
         }
-        Ok(response) => Ok(Content {
-            title: title.to_string(),
-            content: response,
-        }),
+        Ok(response) => {
+            debug!("Successfully received content from Claude for title: {}", title);
+            Ok(Content {
+                title: title.to_string(),
+                content: response,
+            })
+        },
     }
 }
 
 async fn fetch_content_from_gpt(title: &str, config: &Config) -> Result<Content, Box<dyn std::error::Error>> {
-    println!("Fetching content from GPT for title: {}", title);
+    info!("Fetching content from GPT for title: {}", title);
 
     let messages = get_messages(title);
     let response = fetch_from_gpt(messages, config).await;
 
     match response {
-        Err(_) => {
-            println!("Error: {:?}", response);
+        Err(e) => {
+            error!("Failed to fetch content from GPT for title '{}': {:?}", title, e);
             Ok(Content {
                 title: "".to_string(),
                 content: "".to_string(),
             })
         }
-        Ok(response) => Ok(Content {
-            title: title.to_string(),
-            content: response,
-        }),
+        Ok(response) => {
+            debug!("Successfully received content from GPT for title: {}", title);
+            Ok(Content {
+                title: title.to_string(),
+                content: response,
+            })
+        },
     }
 }
 

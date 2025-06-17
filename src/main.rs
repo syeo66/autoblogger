@@ -11,11 +11,17 @@ use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
+use tracing::{error, info};
 
 use config::Config;
 
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Initialize tracing
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env().add_directive("autoblogger=info".parse()?))
+        .init();
+
     // Load and validate configuration
     let config = Config::from_env()
         .map_err(|e| format!("Configuration error: {}", e))?;
@@ -29,7 +35,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // Bind to the port and listen for incoming TCP connections
     let listener = TcpListener::bind(addr).await?;
-    println!("Listening on http://{}", addr);
+    info!("Server listening on http://{}", addr);
     loop {
         // When an incoming TCP connection is received grab a TCP stream for
         // client<->server communication.
@@ -56,7 +62,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 }))
                 .await
             {
-                println!("Error serving connection: {:?}", err);
+                error!("Error serving connection: {:?}", err);
             }
         });
     }
