@@ -1,13 +1,36 @@
 use chrono::{DateTime, Duration, Local, NaiveDateTime};
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, Connection};
 use std::env;
+use std::sync::OnceLock;
 
 use crate::models::Content;
 
-pub fn create_connection() -> Result<Connection, rusqlite::Error> {
+pub type DbPool = Pool<SqliteConnectionManager>;
+
+static DB_POOL: OnceLock<DbPool> = OnceLock::new();
+
+pub fn init_pool() -> Result<DbPool, Box<dyn std::error::Error>> {
     let db_path = env::var("DB_PATH").unwrap_or("./blog.db".to_string());
-    Connection::open(db_path)
+    let manager = SqliteConnectionManager::file(db_path);
+    let pool = Pool::builder()
+        .max_size(10)
+        .build(manager)?;
+    
+    // Initialize database schema
+    let conn = pool.get()?;
+    initialize_database(&conn)?;
+    
+    Ok(pool)
 }
+
+pub fn get_pool() -> &'static DbPool {
+    DB_POOL.get_or_init(|| {
+        init_pool().expect("Failed to initialize database pool")
+    })
+}
+
 
 pub fn initialize_database(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute(
@@ -31,17 +54,20 @@ pub fn initialize_database(conn: &Connection) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
-pub fn get_article_by_slug(conn: &Connection, slug: &str) -> Result<Content, rusqlite::Error> {
-    conn.prepare("SELECT title, content FROM articles WHERE slug = ?1 LIMIT 1")?
-        .query_row(params![slug], |row| {
-            Ok(Content {
-                title: row.get(0)?,
-                content: row.get(1)?,
-            })
+pub fn get_article_by_slug(pool: &DbPool, slug: &str) -> Result<Content, Box<dyn std::error::Error + Send + Sync>> {
+    let conn = pool.get()?;
+    let mut stmt = conn.prepare("SELECT title, content FROM articles WHERE slug = ?1 LIMIT 1")?;
+    let result = stmt.query_row(params![slug], |row| {
+        Ok(Content {
+            title: row.get(0)?,
+            content: row.get(1)?,
         })
+    })?;
+    Ok(result)
 }
 
-pub fn get_recent_articles(conn: &Connection) -> Result<Vec<(String, String)>, rusqlite::Error> {
+pub fn get_recent_articles(pool: &DbPool) -> Result<Vec<(String, String)>, Box<dyn std::error::Error + Send + Sync>> {
+    let conn = pool.get()?;
     let mut stmt = conn.prepare("SELECT title, slug FROM articles ORDER BY createdAt DESC LIMIT 20")?;
     let rows = stmt.query_map([], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -54,7 +80,8 @@ pub fn get_recent_articles(conn: &Connection) -> Result<Vec<(String, String)>, r
     Ok(articles)
 }
 
-pub fn check_daily_rate_limit(conn: &Connection) -> Result<Option<String>, rusqlite::Error> {
+pub fn check_daily_rate_limit(pool: &DbPool) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+    let conn = pool.get()?;
     let result = conn
         .prepare("SELECT createdAt FROM articles WHERE createdAt > datetime('now','-1 day') LIMIT 1")?
         .query_row([], |row| row.get::<usize, String>(0));
@@ -62,11 +89,12 @@ pub fn check_daily_rate_limit(conn: &Connection) -> Result<Option<String>, rusql
     match result {
         Ok(date_str) => Ok(Some(date_str)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(e),
+        Err(e) => Err(e.into()),
     }
 }
 
-pub fn check_generation_lock(conn: &Connection) -> Result<bool, rusqlite::Error> {
+pub fn check_generation_lock(pool: &DbPool) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    let conn = pool.get()?;
     let result = conn
         .prepare("SELECT createdAt FROM locks WHERE createdAt > datetime('now','-5 minutes') LIMIT 1")?
         .query_row([], |row| row.get::<usize, String>(0));
@@ -74,16 +102,18 @@ pub fn check_generation_lock(conn: &Connection) -> Result<bool, rusqlite::Error>
     match result {
         Ok(_) => Ok(true),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
-        Err(e) => Err(e),
+        Err(e) => Err(e.into()),
     }
 }
 
-pub fn create_generation_lock(conn: &Connection) -> Result<(), rusqlite::Error> {
+pub fn create_generation_lock(pool: &DbPool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let conn = pool.get()?;
     conn.execute("INSERT INTO locks (title) VALUES (?1)", params!["lock"])?;
     Ok(())
 }
 
-pub fn insert_article(conn: &Connection, slug: &str, title: &str, content: &str) -> Result<(), rusqlite::Error> {
+pub fn insert_article(pool: &DbPool, slug: &str, title: &str, content: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let conn = pool.get()?;
     conn.execute(
         "INSERT INTO articles (slug, title, content) VALUES (?1, ?2, ?3)",
         params![slug, title, content],

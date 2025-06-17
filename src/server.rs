@@ -9,9 +9,8 @@ use std::convert::Infallible;
 
 use crate::ai::{capitalize_words, fetch_content, fetch_title, unslugify};
 use crate::database::{
-    calculate_wait_time, check_daily_rate_limit, check_generation_lock, create_connection,
-    create_generation_lock, get_article_by_slug, get_recent_articles, initialize_database,
-    insert_article,
+    calculate_wait_time, check_daily_rate_limit, check_generation_lock, create_generation_lock,
+    get_article_by_slug, get_pool, get_recent_articles, insert_article,
 };
 
 pub async fn handle_request(req: Request<hyper::body::Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
@@ -45,22 +44,9 @@ pub async fn handle_request(req: Request<hyper::body::Incoming>) -> Result<Respo
 }
 
 async fn handle_article_list() -> Result<Response<Full<Bytes>>, Infallible> {
-    let conn = match create_connection() {
-        Ok(conn) => conn,
-        Err(_) => {
-            return Ok(Response::new(Full::new(Bytes::from(
-                "Database connection failed"
-            ))));
-        }
-    };
+    let pool = get_pool();
 
-    if let Err(_) = initialize_database(&conn) {
-        return Ok(Response::new(Full::new(Bytes::from(
-            "Database initialization failed"
-        ))));
-    }
-
-    let articles = match get_recent_articles(&conn) {
+    let articles = match get_recent_articles(pool) {
         Ok(articles) => articles,
         Err(_) => {
             return Ok(Response::new(Full::new(Bytes::from(
@@ -87,22 +73,9 @@ async fn handle_article_list() -> Result<Response<Full<Bytes>>, Infallible> {
 }
 
 async fn handle_article_request(slug: &str) -> Result<Response<Full<Bytes>>, Infallible> {
-    let conn = match create_connection() {
-        Ok(conn) => conn,
-        Err(_) => {
-            return Ok(Response::new(Full::new(Bytes::from(
-                "Database connection failed"
-            ))));
-        }
-    };
+    let pool = get_pool();
 
-    if let Err(_) = initialize_database(&conn) {
-        return Ok(Response::new(Full::new(Bytes::from(
-            "Database initialization failed"
-        ))));
-    }
-
-    let existing_article = get_article_by_slug(&conn, slug);
+    let existing_article = get_article_by_slug(pool, slug);
 
     if let Ok(content) = existing_article {
         let raw = if content.content.trim().starts_with("#") {
@@ -115,7 +88,7 @@ async fn handle_article_request(slug: &str) -> Result<Response<Full<Bytes>>, Inf
         return Ok(Response::new(Full::new(Bytes::from(html))));
     }
 
-    if let Ok(Some(last_date)) = check_daily_rate_limit(&conn) {
+    if let Ok(Some(last_date)) = check_daily_rate_limit(pool) {
         if let Ok(hours_to_wait) = calculate_wait_time(&last_date) {
             let msg = format!(
                 "Only one article can be generated per day. Please wait {} hours before generating a new article.",
@@ -126,13 +99,13 @@ async fn handle_article_request(slug: &str) -> Result<Response<Full<Bytes>>, Inf
         }
     }
 
-    if let Ok(true) = check_generation_lock(&conn) {
+    if let Ok(true) = check_generation_lock(pool) {
         let msg = "Content creation temporary locked".to_string();
         let html = apply_layout("Try later", &msg);
         return Ok(Response::new(Full::new(Bytes::from(html))));
     }
 
-    let _ = create_generation_lock(&conn);
+    let _ = create_generation_lock(pool);
 
     let title = fetch_title(slug).await.unwrap_or_else(|_| {
         let t = unslugify(slug);
@@ -151,7 +124,7 @@ async fn handle_article_request(slug: &str) -> Result<Response<Full<Bytes>>, Inf
         ))));
     }
 
-    let _ = insert_article(&conn, slug, &content.title, &content.content);
+    let _ = insert_article(pool, slug, &content.title, &content.content);
 
     let raw = if content.content.trim().starts_with("#") {
         remove_first_line(&content.content)
