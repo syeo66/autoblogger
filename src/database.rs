@@ -11,18 +11,6 @@ pub type DbPool = Pool<SqliteConnectionManager>;
 
 static DB_POOL: OnceLock<DbPool> = OnceLock::new();
 
-pub fn init_pool() -> Result<DbPool, Box<dyn std::error::Error>> {
-    let manager = SqliteConnectionManager::file("./blog.db");
-    let pool = Pool::builder()
-        .max_size(10)
-        .build(manager)?;
-    
-    // Initialize database schema
-    let conn = pool.get()?;
-    initialize_database(&conn)?;
-    
-    Ok(pool)
-}
 
 pub fn init_pool_with_config(config: &Config) -> Result<DbPool, Box<dyn std::error::Error>> {
     let manager = SqliteConnectionManager::file(&config.db_path);
@@ -42,9 +30,7 @@ pub fn init_pool_with_config(config: &Config) -> Result<DbPool, Box<dyn std::err
 }
 
 pub fn get_pool() -> &'static DbPool {
-    DB_POOL.get_or_init(|| {
-        init_pool().expect("Failed to initialize database pool")
-    })
+    DB_POOL.get().expect("Database pool not initialized")
 }
 
 
