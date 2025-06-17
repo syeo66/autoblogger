@@ -13,32 +13,35 @@ use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
 
-#[tokio::main]
-pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // This address is localhost
-    let addr: SocketAddr = ([0, 0, 0, 0], 3000).into();
-
-    env::var("AI_MODEL").expect("AI_MODEL should be set");
-
-    let ai_model = env::var("AI_MODEL").unwrap();
+fn validate_environment() -> Result<(), Box<dyn std::error::Error>> {
+    let ai_model = env::var("AI_MODEL")
+        .map_err(|_| "AI_MODEL environment variable must be set")?;
 
     match ai_model.as_str() {
         "gpt4" => {
-            env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY should be set");
+            env::var("OPENAI_API_KEY")
+                .map_err(|_| "OPENAI_API_KEY must be set when using gpt4 model")?;
         }
-
-        "claude3" => {
-            env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY should be set");
+        "claude3" | "claude4" => {
+            env::var("ANTHROPIC_API_KEY")
+                .map_err(|_| "ANTHROPIC_API_KEY must be set when using claude3 or claude4 model")?;
         }
-
-        "claude4" => {
-            env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY should be set");
-        }
-
         _ => {
-            panic!("AI_MODEL should be 'gpt4', 'claude3' or 'claude4'");
+            return Err("AI_MODEL must be 'gpt4', 'claude3', or 'claude4'".into());
         }
     }
+
+    Ok(())
+}
+
+#[tokio::main]
+pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Validate environment variables before starting server
+    validate_environment()
+        .map_err(|e| format!("Configuration error: {}", e))?;
+
+    // This address is localhost
+    let addr: SocketAddr = ([0, 0, 0, 0], 3000).into();
 
     // Bind to the port and listen for incoming TCP connections
     let listener = TcpListener::bind(addr).await?;
