@@ -30,7 +30,7 @@ impl AiModel {
         match self {
             AiModel::Gpt4 => "gpt-4o",
             AiModel::Claude3 => "claude-3-7-sonnet-latest",
-            AiModel::Claude4 => "claude-sonnet-4-20250514",
+            AiModel::Claude4 => "claude-sonnet-4-5",
         }
     }
 
