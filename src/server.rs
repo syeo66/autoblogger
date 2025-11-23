@@ -64,10 +64,11 @@ async fn handle_article_list() -> Result<Response<Full<Bytes>>, Infallible> {
     html.push_str("<ul class='article-list'>");
     
     for (title, slug) in articles {
+        let cleaned_title = strip_title_hash(&title.trim_matches('"'));
         html.push_str(&format!(
             "<li><a href=\"{}\">{}</a></li>",
             slug,
-            title.trim_matches('"')
+            cleaned_title
         ));
     }
     
@@ -90,7 +91,8 @@ async fn handle_article_request(slug: &str, config: &Config) -> Result<Response<
             content.content
         };
         let html = markdown_parse(&raw);
-        let html = apply_layout(&content.title.trim_matches('"'), &html);
+        let cleaned_title = strip_title_hash(&content.title.trim_matches('"'));
+        let html = apply_layout(&cleaned_title, &html);
         return Ok(Response::new(Full::new(Bytes::from(html))));
     }
 
@@ -150,13 +152,18 @@ async fn handle_article_request(slug: &str, config: &Config) -> Result<Response<
         content.content
     };
     let html = markdown_parse(&raw);
-    let html = apply_layout(&content.title.trim_matches('"'), &html);
+    let cleaned_title = strip_title_hash(&content.title.trim_matches('"'));
+    let html = apply_layout(&cleaned_title, &html);
 
     Ok(Response::new(Full::new(Bytes::from(html))))
 }
 
 fn remove_first_line(s: &str) -> String {
     s.lines().clone().skip(1).collect::<Vec<&str>>().join("\n")
+}
+
+fn strip_title_hash(title: &str) -> String {
+    title.trim_start_matches('#').trim_start().to_string()
 }
 
 fn apply_layout(title: &str, content: &str) -> String {
