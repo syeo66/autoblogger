@@ -6,14 +6,14 @@ use crate::models::{AnthropicCompletion, Content, GptCompletion, Message, Reques
 
 pub async fn fetch_title(slug: &str, config: &Config) -> Result<String, Box<dyn std::error::Error>> {
     match config.ai_model {
-        AiModel::Gpt4 => fetch_title_from_gpt(slug, config).await,
+        AiModel::Gpt4 | AiModel::Gpt5 => fetch_title_from_gpt(slug, config).await,
         AiModel::Claude3 | AiModel::Claude4 => fetch_title_from_claude(slug, config).await,
     }
 }
 
 pub async fn fetch_content(title: &str, config: &Config) -> Result<Content, Box<dyn std::error::Error>> {
     match config.ai_model {
-        AiModel::Gpt4 => fetch_content_from_gpt(title, config).await,
+        AiModel::Gpt4 | AiModel::Gpt5 => fetch_content_from_gpt(title, config).await,
         AiModel::Claude3 | AiModel::Claude4 => fetch_content_from_claude(title, config).await,
     }
 }

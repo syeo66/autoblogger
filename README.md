@@ -1,6 +1,6 @@
 # Autoblogger
 
-Autoblogger is a simple blogging platform that generates blog posts using the ChatGPT language model. Please note that the generated content is based on AI-generated responses and may not always be accurate, reliable, or factual. The code provided here is for demonstration purposes only and comes with the following warnings and limitations:
+Autoblogger is a simple blogging platform that generates blog posts using AI language models (OpenAI's GPT-4/GPT-5 or Anthropic's Claude 3/4). Please note that the generated content is based on AI-generated responses and may not always be accurate, reliable, or factual. The code provided here is for demonstration purposes only and comes with the following warnings and limitations:
 
 - **Hallucination**: The AI model used by Autoblogger may sometimes generate text that is creative but not necessarily grounded in reality. The generated content should be carefully reviewed and fact-checked before publishing.
 
@@ -10,7 +10,7 @@ Autoblogger is a simple blogging platform that generates blog posts using the Ch
 
 - **Not suitable for public servers**: Due to the potential inaccuracies and hallucinations in the generated content, it is strongly recommended not to use Autoblogger on public servers or platforms where the generated content is accessible to a wide audience. It is more suitable for personal use or controlled environments where the content can be reviewed and verified before publication.
 
-Please exercise caution and use this code responsibly. OpenAI's guidelines and best practices should be followed when deploying AI-generated content.
+Please exercise caution and use this code responsibly. The guidelines and best practices of the respective AI provider (OpenAI or Anthropic) should be followed when deploying AI-generated content.
 
 ## Installation
 
@@ -34,10 +34,10 @@ Please exercise caution and use this code responsibly. OpenAI's guidelines and b
 
 ## Usage
 
-1. Set the `AI_MODEL` environment variable to `gpt4`, `claude3` or `claude4`
+1. Set the `AI_MODEL` environment variable to `gpt4`, `gpt5`, `claude3`, or `claude4`
 
-2. Set the `OPENAI_API_KEY` environment variable with your OpenAI API key,
-   or use `ANTHROPIC_API_KEY` if you use the Claude model:
+2. Set the `OPENAI_API_KEY` environment variable with your OpenAI API key (required for `gpt4` and `gpt5`),
+   or use `ANTHROPIC_API_KEY` if you use a Claude model:
 
    ```shell
    export OPENAI_API_KEY=your-api-key
