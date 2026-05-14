@@ -163,7 +163,8 @@ fn remove_first_line(s: &str) -> String {
 }
 
 fn strip_title_hash(title: &str) -> String {
-    title.trim_start_matches('#').trim_start().to_string()
+    let s = title.trim_start_matches('#').trim_start();
+    s.trim_matches('*').to_string()
 }
 
 fn apply_layout(title: &str, content: &str) -> String {
